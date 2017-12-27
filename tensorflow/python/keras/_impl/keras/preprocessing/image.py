@@ -556,8 +556,7 @@ class ImageDataGenerator(object):
                           save_to_dir=None,
                           save_prefix='',
                           save_format='png',
-                          follow_links=False,
-                          interpolation='nearest'):
+                          follow_links=False):
     return DirectoryIterator(
         directory,
         self,
@@ -572,8 +571,7 @@ class ImageDataGenerator(object):
         save_to_dir=save_to_dir,
         save_prefix=save_prefix,
         save_format=save_format,
-        follow_links=follow_links,
-        interpolation=interpolation)
+        follow_links=follow_links)
 
   def standardize(self, x):
     """Apply the normalization configuration to a batch of inputs.
@@ -598,7 +596,7 @@ class ImageDataGenerator(object):
         x -= self.mean
       else:
         logging.warning('This ImageDataGenerator specifies '
-                        '`featurewise_center`, but it hasn\'t '
+                        '`featurewise_center`, but it hasn\'t'
                         'been fit on any training data. Fit it '
                         'first by calling `.fit(numpy_data)`.')
     if self.featurewise_std_normalization:
@@ -606,7 +604,7 @@ class ImageDataGenerator(object):
         x /= (self.std + 1e-7)
       else:
         logging.warning('This ImageDataGenerator specifies '
-                        '`featurewise_std_normalization`, but it hasn\'t '
+                        '`featurewise_std_normalization`, but it hasn\'t'
                         'been fit on any training data. Fit it '
                         'first by calling `.fit(numpy_data)`.')
     if self.zca_whitening:
@@ -616,7 +614,7 @@ class ImageDataGenerator(object):
         x = np.reshape(whitex, x.shape)
       else:
         logging.warning('This ImageDataGenerator specifies '
-                        '`zca_whitening`, but it hasn\'t '
+                        '`zca_whitening`, but it hasn\'t'
                         'been fit on any training data. Fit it '
                         'first by calling `.fit(numpy_data)`.')
     return x
@@ -835,7 +833,8 @@ class Iterator(Sequence):
     return self._get_batches_of_transformed_samples(index_array)
 
   def __len__(self):
-    return (self.n + self.batch_size - 1) // self.batch_size  # round up
+    length = int(np.ceil(self.n / float(self.batch_size)))
+    return np.maximum(length, 0)
 
   def on_epoch_end(self):
     self._set_index_array()
@@ -1092,12 +1091,6 @@ class DirectoryIterator(Iterator):
           images (if `save_to_dir` is set).
       save_format: Format to use for saving sample images
           (if `save_to_dir` is set).
-      interpolation: Interpolation method used to resample the image if the
-          target size is different from that of the loaded image.
-          Supported methods are "nearest", "bilinear", and "bicubic".
-          If PIL version 1.1.3 or newer is installed, "lanczos" is also
-          supported. If PIL version 3.4.0 or newer is installed, "box" and
-          "hamming" are also supported. By default, "nearest" is used.
   """
 
   def __init__(self,
@@ -1114,8 +1107,7 @@ class DirectoryIterator(Iterator):
                save_to_dir=None,
                save_prefix='',
                save_format='png',
-               follow_links=False,
-               interpolation='nearest'):
+               follow_links=False):
     if data_format is None:
       data_format = K.image_data_format()
     self.directory = directory
@@ -1146,7 +1138,6 @@ class DirectoryIterator(Iterator):
     self.save_to_dir = save_to_dir
     self.save_prefix = save_prefix
     self.save_format = save_format
-    self.interpolation = interpolation
 
     white_list_formats = {'png', 'jpg', 'jpeg', 'bmp', 'ppm'}
 
@@ -1201,8 +1192,7 @@ class DirectoryIterator(Iterator):
       fname = self.filenames[j]
       img = load_img(os.path.join(self.directory, fname),
                      grayscale=grayscale,
-                     target_size=self.target_size,
-                     interpolation=self.interpolation)
+                     target_size=self.target_size)
       x = img_to_array(img, data_format=self.data_format)
       x = self.image_data_generator.random_transform(x)
       x = self.image_data_generator.standardize(x)

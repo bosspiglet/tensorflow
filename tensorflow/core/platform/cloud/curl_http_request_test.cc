@@ -263,15 +263,16 @@ class FakeLibCurl : public LibCurl {
 TEST(CurlHttpRequestTest, GetRequest) {
   FakeLibCurl libcurl("get response", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.insert(scratch.begin(), kTestContent.begin(), kTestContent.end());
   scratch.reserve(100);
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBuffer(&scratch);
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetRange(100, 199));
+  TF_EXPECT_OK(http_request.SetResultBuffer(&scratch));
   TF_EXPECT_OK(http_request.Send());
 
   EXPECT_EQ("get response", string(scratch.begin(), scratch.end()));
@@ -287,48 +288,18 @@ TEST(CurlHttpRequestTest, GetRequest) {
   EXPECT_EQ(200, http_request.GetResponseCode());
 }
 
-TEST(CurlHttpRequestTest, GetRequest_Direct) {
-  FakeLibCurl libcurl("get response", 200);
-  CurlHttpRequest http_request(&libcurl);
-
-  std::vector<char> scratch(100, 0);
-
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBufferDirect(scratch.data(), scratch.capacity());
-  TF_EXPECT_OK(http_request.Send());
-
-  string expected_response = "get response";
-  size_t response_bytes_transferred =
-      http_request.GetResultBufferDirectBytesTransferred();
-  EXPECT_EQ(response_bytes_transferred, expected_response.size());
-  EXPECT_EQ(
-      "get response",
-      string(scratch.begin(), scratch.begin() + response_bytes_transferred));
-
-  // Check interactions with libcurl.
-  EXPECT_TRUE(libcurl.is_initialized_);
-  EXPECT_EQ("http://www.testuri.com", libcurl.url_);
-  EXPECT_EQ("100-199", libcurl.range_);
-  EXPECT_EQ("", libcurl.custom_request_);
-  EXPECT_EQ(1, libcurl.headers_->size());
-  EXPECT_EQ("Authorization: Bearer fake-bearer", (*libcurl.headers_)[0]);
-  EXPECT_FALSE(libcurl.is_post_);
-  EXPECT_EQ(200, http_request.GetResponseCode());
-}
-
 TEST(CurlHttpRequestTest, GetRequest_Empty) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.resize(0);
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBuffer(&scratch);
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetRange(100, 199));
+  TF_EXPECT_OK(http_request.SetResultBuffer(&scratch));
   TF_EXPECT_OK(http_request.Send());
 
   EXPECT_TRUE(scratch.empty());
@@ -348,14 +319,15 @@ TEST(CurlHttpRequestTest, GetRequest_RangeOutOfBound) {
   FakeLibCurl libcurl("get response", 416);
   libcurl.curl_easy_perform_result_ = CURLE_WRITE_ERROR;
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.insert(scratch.end(), kTestContent.begin(), kTestContent.end());
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBuffer(&scratch);
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetRange(100, 199));
+  TF_EXPECT_OK(http_request.SetResultBuffer(&scratch));
   TF_EXPECT_OK(http_request.Send());
 
   EXPECT_TRUE(scratch.empty());
@@ -366,14 +338,15 @@ TEST(CurlHttpRequestTest, GetRequest_503) {
   FakeLibCurl libcurl("get response", 503);
   libcurl.curl_easy_perform_result_ = CURLE_WRITE_ERROR;
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.insert(scratch.end(), kTestContent.begin(), kTestContent.end());
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBuffer(&scratch);
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetRange(100, 199));
+  TF_EXPECT_OK(http_request.SetResultBuffer(&scratch));
   const auto& status = http_request.Send();
   EXPECT_EQ(error::UNAVAILABLE, status.code());
   EXPECT_EQ(
@@ -388,11 +361,12 @@ TEST(CurlHttpRequestTest, GetRequest_HttpCode0) {
   libcurl.curl_easy_perform_result_ = CURLE_OPERATION_TIMEDOUT;
   libcurl.curl_easy_perform_error_message_ = "Operation timed out";
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.insert(scratch.end(), kTestContent.begin(), kTestContent.end());
 
-  http_request.SetUri("http://www.testuri.com");
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
   const auto& status = http_request.Send();
   EXPECT_EQ(error::UNAVAILABLE, status.code());
   EXPECT_EQ(
@@ -407,8 +381,9 @@ TEST(CurlHttpRequestTest, ResponseHeaders) {
       "get response", 200,
       {"Location: abcd", "Content-Type: text", "unparsable header"});
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
-  http_request.SetUri("http://www.testuri.com");
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
   TF_EXPECT_OK(http_request.Send());
 
   EXPECT_EQ("abcd", http_request.GetResponseHeader("Location"));
@@ -419,14 +394,15 @@ TEST(CurlHttpRequestTest, ResponseHeaders) {
 TEST(CurlHttpRequestTest, PutRequest_WithBody_FromFile) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   auto content_filename = io::JoinPath(testing::TmpDir(), "content");
   std::ofstream content(content_filename, std::ofstream::binary);
   content << "post body content";
   content.close();
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
   TF_EXPECT_OK(http_request.SetPutFromFile(content_filename, 0));
   TF_EXPECT_OK(http_request.Send());
 
@@ -446,14 +422,15 @@ TEST(CurlHttpRequestTest, PutRequest_WithBody_FromFile) {
 TEST(CurlHttpRequestTest, PutRequest_WithBody_FromFile_NonZeroOffset) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   auto content_filename = io::JoinPath(testing::TmpDir(), "content");
   std::ofstream content(content_filename, std::ofstream::binary);
   content << "post body content";
   content.close();
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
   TF_EXPECT_OK(http_request.SetPutFromFile(content_filename, 7));
   TF_EXPECT_OK(http_request.Send());
 
@@ -466,10 +443,11 @@ TEST(CurlHttpRequestTest, PutRequest_WithBody_FromFile_NonZeroOffset) {
 TEST(CurlHttpRequestTest, PutRequest_WithoutBody) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetPutEmptyBody();
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetPutEmptyBody());
   TF_EXPECT_OK(http_request.Send());
 
   // Check interactions with libcurl.
@@ -486,12 +464,13 @@ TEST(CurlHttpRequestTest, PutRequest_WithoutBody) {
 TEST(CurlHttpRequestTest, PostRequest_WithBody_FromMemory) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   string content = "post body content";
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetPostFromBuffer(content.c_str(), content.size());
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetPostFromBuffer(content.c_str(), content.size()));
   TF_EXPECT_OK(http_request.Send());
 
   // Check interactions with libcurl.
@@ -508,9 +487,11 @@ TEST(CurlHttpRequestTest, PostRequest_WithBody_FromMemory) {
 TEST(CurlHttpRequestTest, PostRequest_WithoutBody) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetPostEmptyBody();
+  TF_EXPECT_OK(http_request.Init());
+
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetPostEmptyBody());
   TF_EXPECT_OK(http_request.Send());
 
   // Check interactions with libcurl.
@@ -527,9 +508,11 @@ TEST(CurlHttpRequestTest, PostRequest_WithoutBody) {
 TEST(CurlHttpRequestTest, DeleteRequest) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetDeleteRequest();
+  TF_EXPECT_OK(http_request.Init());
+
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetDeleteRequest());
   TF_EXPECT_OK(http_request.Send());
 
   // Check interactions with libcurl.
@@ -544,37 +527,65 @@ TEST(CurlHttpRequestTest, DeleteRequest) {
 TEST(CurlHttpRequestTest, WrongSequenceOfCalls_NoUri) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  ASSERT_DEATH((void)http_request.Send(), "URI has not been set");
+  TF_EXPECT_OK(http_request.Init());
+
+  auto s = http_request.Send();
+  ASSERT_TRUE(errors::IsFailedPrecondition(s));
+  EXPECT_TRUE(StringPiece(s.error_message()).contains("URI has not been set"));
 }
 
 TEST(CurlHttpRequestTest, WrongSequenceOfCalls_TwoSends) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  http_request.SetUri("http://www.google.com");
+  TF_EXPECT_OK(http_request.Init());
+
+  TF_EXPECT_OK(http_request.SetUri("http://www.google.com"));
   TF_EXPECT_OK(http_request.Send());
-  ASSERT_DEATH((void)http_request.Send(), "The request has already been sent");
+  auto s = http_request.Send();
+  ASSERT_TRUE(errors::IsFailedPrecondition(s));
+  EXPECT_TRUE(StringPiece(s.error_message())
+                  .contains("The request has already been sent"));
 }
 
 TEST(CurlHttpRequestTest, WrongSequenceOfCalls_ReusingAfterSend) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  http_request.SetUri("http://www.google.com");
+  TF_EXPECT_OK(http_request.Init());
+
+  TF_EXPECT_OK(http_request.SetUri("http://www.google.com"));
   TF_EXPECT_OK(http_request.Send());
-  ASSERT_DEATH(http_request.SetUri("http://mail.google.com"),
-               "The request has already been sent");
+  auto s = http_request.SetUri("http://mail.google.com");
+  ASSERT_TRUE(errors::IsFailedPrecondition(s));
+  EXPECT_TRUE(StringPiece(s.error_message())
+                  .contains("The request has already been sent"));
 }
 
 TEST(CurlHttpRequestTest, WrongSequenceOfCalls_SettingMethodTwice) {
   FakeLibCurl libcurl("", 200);
   CurlHttpRequest http_request(&libcurl);
-  http_request.SetDeleteRequest();
-  ASSERT_DEATH(http_request.SetPostEmptyBody(),
-               "HTTP method has been already set");
+  TF_EXPECT_OK(http_request.Init());
+
+  TF_EXPECT_OK(http_request.SetDeleteRequest());
+  auto s = http_request.SetPostEmptyBody();
+  ASSERT_TRUE(errors::IsFailedPrecondition(s));
+  EXPECT_TRUE(StringPiece(s.error_message())
+                  .contains("HTTP method has been already set"));
+}
+
+TEST(CurlHttpRequestTest, WrongSequenceOfCalls_NotInitialized) {
+  FakeLibCurl libcurl("", 200);
+  CurlHttpRequest http_request(&libcurl);
+
+  auto s = http_request.SetPostEmptyBody();
+  ASSERT_TRUE(errors::IsFailedPrecondition(s));
+  EXPECT_TRUE(StringPiece(s.error_message())
+                  .contains("The object has not been initialized"));
 }
 
 TEST(CurlHttpRequestTest, EscapeString) {
   FakeLibCurl libcurl("get response", 200);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
   const string test_string = "a/b/c";
   EXPECT_EQ("a%2Fb%2Fc", http_request.EscapeString(test_string));
 }
@@ -582,15 +593,16 @@ TEST(CurlHttpRequestTest, EscapeString) {
 TEST(CurlHttpRequestTest, ErrorReturnsNoResponse) {
   FakeLibCurl libcurl("get response", 500);
   CurlHttpRequest http_request(&libcurl);
+  TF_EXPECT_OK(http_request.Init());
 
   std::vector<char> scratch;
   scratch.insert(scratch.begin(), kTestContent.begin(), kTestContent.end());
   scratch.reserve(100);
 
-  http_request.SetUri("http://www.testuri.com");
-  http_request.AddAuthBearerHeader("fake-bearer");
-  http_request.SetRange(100, 199);
-  http_request.SetResultBuffer(&scratch);
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
+  TF_EXPECT_OK(http_request.AddAuthBearerHeader("fake-bearer"));
+  TF_EXPECT_OK(http_request.SetRange(100, 199));
+  TF_EXPECT_OK(http_request.SetResultBuffer(&scratch));
   EXPECT_EQ(error::UNAVAILABLE, http_request.Send().code());
 
   EXPECT_EQ("", string(scratch.begin(), scratch.end()));
@@ -608,7 +620,8 @@ TEST(CurlHttpRequestTest, ProgressIsOk) {
       },
       &env);
   CurlHttpRequest http_request(&libcurl, &env);
-  http_request.SetUri("http://www.testuri.com");
+  TF_EXPECT_OK(http_request.Init());
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
   TF_EXPECT_OK(http_request.Send());
 }
 
@@ -624,7 +637,8 @@ TEST(CurlHttpRequestTest, ProgressIsStuck) {
       },
       &env);
   CurlHttpRequest http_request(&libcurl, &env);
-  http_request.SetUri("http://www.testuri.com");
+  TF_EXPECT_OK(http_request.Init());
+  TF_EXPECT_OK(http_request.SetUri("http://www.testuri.com"));
   auto status = http_request.Send();
   EXPECT_EQ(error::UNAVAILABLE, status.code());
   EXPECT_EQ(

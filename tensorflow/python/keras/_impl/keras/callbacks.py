@@ -189,7 +189,6 @@ class Callback(object):
 
   def __init__(self):
     self.validation_data = None
-    self.model = None
 
   def set_params(self, params):
     self.params = params

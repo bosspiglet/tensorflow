@@ -171,14 +171,17 @@ void HloModule::ReplaceComputations(
   computations_ = std::move(new_computations);
 }
 
-string HloModule::ToString(const HloPrintOptions& options) const {
+string HloModule::ToString(bool include_large_constants) const {
   std::ostringstream s;
-  s << "HloModule " << name() << "\n\n";
+  s << "HloModule " << name() << ":\n\n";
   for (const HloComputation* computation : MakeComputationPostOrder()) {
     if (computation == entry_computation()) {
       s << "ENTRY ";
     }
-    s << computation->ToString(options) << "\n\n";
+    s << computation->ToString(
+             /*nested_level=*/0,
+             /*include_large_constants=*/include_large_constants)
+      << "\n\n";
   }
   return s.str();
 }
@@ -230,8 +233,8 @@ StatusOr<ProgramShape> ProgramShapeFromProto(const HloModuleProto& module) {
           << "Entry computation has more than one parameter instruction "
              "with parameter number "
           << instruction.parameter_number();
-      parameters[instruction.parameter_number()] = {instruction.name(),
-                                                    &instruction.shape()};
+      parameters[instruction.parameter_number()] = {
+          instruction.parameter_name(), &instruction.shape()};
     }
   }
   TF_RET_CHECK(root != nullptr)

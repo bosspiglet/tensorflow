@@ -33,7 +33,6 @@ class TestMultiGPUModel(test.TestCase):
     output_dim = 1
     hidden_dim = 10
     epochs = 2
-    target_gpu_id = [0, 2, 4]
 
     with self.test_session():
       model = keras.models.Sequential()
@@ -43,12 +42,8 @@ class TestMultiGPUModel(test.TestCase):
 
       x = np.random.random((num_samples, input_dim))
       y = np.random.random((num_samples, output_dim))
-
       parallel_model = keras.utils.multi_gpu_model(model, gpus=gpus)
-      parallel_model.compile(loss='mse', optimizer='rmsprop')
-      parallel_model.fit(x, y, epochs=epochs)
 
-      parallel_model = keras.utils.multi_gpu_model(model, gpus=target_gpu_id)
       parallel_model.compile(loss='mse', optimizer='rmsprop')
       parallel_model.fit(x, y, epochs=epochs)
 
@@ -61,7 +56,6 @@ class TestMultiGPUModel(test.TestCase):
     output_dim_b = 2
     hidden_dim = 10
     epochs = 2
-    target_gpu_id = [0, 2, 4]
 
     with self.test_session():
       input_a = keras.Input((input_dim_a,))
@@ -82,10 +76,6 @@ class TestMultiGPUModel(test.TestCase):
       parallel_model.compile(loss='mse', optimizer='rmsprop')
       parallel_model.fit([a_x, b_x], [a_y, b_y], epochs=epochs)
 
-      parallel_model = keras.utils.multi_gpu_model(model, gpus=target_gpu_id)
-      parallel_model.compile(loss='mse', optimizer='rmsprop')
-      parallel_model.fit([a_x, b_x], [a_y, b_y], epochs=epochs)
-
   def multi_gpu_test_invalid_devices(self):
     with self.test_session():
       input_shape = (1000, 10)
@@ -101,17 +91,4 @@ class TestMultiGPUModel(test.TestCase):
       with self.assertRaises(ValueError):
         parallel_model = keras.utils.multi_gpu_model(
             model, gpus=len(keras.backend._get_available_gpus()) + 1)
-        parallel_model.fit(x, y, epochs=2)
-
-      with self.assertRaises(ValueError):
-        parallel_model = keras.utils.multi_gpu_model(
-            model, gpus=[0, 2, 4, 6, 8])
-        parallel_model.fit(x, y, epochs=2)
-
-      with self.assertRaises(ValueError):
-        parallel_model = keras.utils.multi_gpu_model(model, gpus=1)
-        parallel_model.fit(x, y, epochs=2)
-
-      with self.assertRaises(ValueError):
-        parallel_model = keras.utils.multi_gpu_model(model, gpus=[0])
         parallel_model.fit(x, y, epochs=2)

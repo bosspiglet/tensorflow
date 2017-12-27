@@ -73,23 +73,10 @@ void KernelSupportLibrary::EmitAndCallOutlinedKernel(
   llvm::Module* module = ir_builder->GetInsertBlock()->getModule();
   llvm::Function* function =
       module->getFunction(llvm_ir::AsStringRef(kernel_name));
-
-  int64 null_arg_idx = -1;
-  std::vector<llvm::Value*> sanitized_args;
-  sanitized_args.reserve(arguments.size());
-  for (int64 i = 0, e = arguments.size(); i < e; i++) {
-    if (arguments[i]) {
-      sanitized_args.push_back(arguments[i]);
-    } else {
-      CHECK_EQ(null_arg_idx, -1);
-      null_arg_idx = i;
-    }
-  }
-
   if (!function) {
     VLOG(2) << "Generating kernel for " << kernel_name;
     std::vector<llvm::Type*> arg_types;
-    std::transform(sanitized_args.begin(), sanitized_args.end(),
+    std::transform(arguments.begin(), arguments.end(),
                    std::back_inserter(arg_types),
                    [](llvm::Value* arg) { return arg->getType(); });
 
@@ -111,24 +98,14 @@ void KernelSupportLibrary::EmitAndCallOutlinedKernel(
     ir_builder->SetInsertPoint(return_inst);
 
     std::vector<llvm::Value*> arg_values;
-    /*
-     * clang on OSX doesn't like std::transform or range for loop here.
-     * See https://github.com/tensorflow/tensorflow/issues/15196
-     */
-    for (llvm::Function::arg_iterator arg = function->arg_begin(),
-                                      arg_e = function->arg_end();
-         arg != arg_e; ++arg) {
-      arg_values.push_back(arg);
-    }
-    if (null_arg_idx != -1) {
-      arg_values.insert(arg_values.begin() + null_arg_idx, nullptr);
-    }
+    std::transform(function->arg_begin(), function->arg_end(),
+                   std::back_inserter(arg_values), std::addressof<llvm::Value>);
     kernel_body_generator(arg_values);
   } else {
     VLOG(3) << "Re-using kernel for " << kernel_name;
   }
 
-  ir_builder->CreateCall(function, llvm_ir::AsArrayRef(sanitized_args));
+  ir_builder->CreateCall(function, llvm_ir::AsArrayRef(arguments));
 }
 
 }  // namespace xla

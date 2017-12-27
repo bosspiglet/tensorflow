@@ -29,7 +29,7 @@ bool ResolveMeanAttributes::Run(Model* model, std::size_t op_index) {
   if (mean_op->type != OperatorType::kMean) return false;
   auto* op = static_cast<MeanOperator*>(mean_op);
 
-  if (!op->axis.empty()) {
+  if (!op->reduction_indices.empty()) {
     // Attributes already resolved
     return false;
   }
@@ -40,15 +40,17 @@ bool ResolveMeanAttributes::Run(Model* model, std::size_t op_index) {
   if (!indices_array.has_shape()) return false;
 
   // We only support simultaneous reduction over width and height.
-  std::vector<int> axis = indices_array.GetBuffer<ArrayDataType::kInt32>().data;
-  if (axis.size() != 2) {
+  std::vector<int> reduction_indices =
+      indices_array.GetBuffer<ArrayDataType::kInt32>().data;
+  if (reduction_indices.size() != 2) {
     return false;
   }
-  if (!((axis[0] == 1 && axis[1] == 2) || (axis[0] == 2 && axis[1] == 1))) {
+  if (!((reduction_indices[0] == 1 && reduction_indices[1] == 2) ||
+        (reduction_indices[0] == 2 && reduction_indices[1] == 1))) {
     return false;
   }
 
-  op->axis = axis;
+  op->reduction_indices = reduction_indices;
   return true;
 }
 

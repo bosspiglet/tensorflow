@@ -166,7 +166,7 @@ void HloTfGraphBuilder::SetNodeAttrs(const HloInstruction* instruction,
       layout_string = ShapeUtil::HumanStringWithLayout(instruction->shape());
     } else {
       layout_string = StrCat(
-          "{", Join(LayoutUtil::MinorToMajor(instruction->shape()), ","), "}");
+          "{", Join(instruction->shape().layout().minor_to_major(), ","), "}");
     }
     attrs["layout"].set_s(layout_string);
   }

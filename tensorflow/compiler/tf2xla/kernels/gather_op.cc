@@ -198,7 +198,6 @@ void GatherOpDynamicSlice::Compile(XlaOpKernelContext* context) {
 }
 
 REGISTER_XLA_OP(Name("Gather"), GatherOpDynamicSlice);
-REGISTER_XLA_OP(Name("GatherV2").CompileTimeConstInput("axis"),
-                GatherOpDynamicSlice);
+REGISTER_XLA_OP(Name("GatherV2"), GatherOpDynamicSlice);
 
 }  // namespace tensorflow

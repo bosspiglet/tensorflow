@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/python/grappler/model_analyzer.h"
 
 #include <iomanip>
-#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/grappler/costs/graph_properties.h"
 #include "tensorflow/core/grappler/grappler_item.h"
@@ -26,26 +25,26 @@ namespace grappler {
 
 ModelAnalyzer::ModelAnalyzer(const GrapplerItem& item) : item_(item) {}
 
-Status ModelAnalyzer::GenerateReport(bool debug, std::ostream& os) {
+Status ModelAnalyzer::GenerateReport(std::ostream& os) {
   GraphProperties properties(item_);
   TF_RETURN_IF_ERROR(properties.InferStatically(false));
 
   for (const auto& node : item_.MainOpsFanin()) {
-    PrintNodeInfo(node, properties, debug, os);
+    PrintNodeInfo(node, properties, os);
   }
   for (const auto& node : item_.EnqueueOpsFanin()) {
-    PrintNodeInfo(node, properties, debug, os);
+    PrintNodeInfo(node, properties, os);
   }
 
   return Status::OK();
 }
 
 void ModelAnalyzer::PrintNodeInfo(const NodeDef* node,
-                                  const GraphProperties& properties, bool debug,
+                                  const GraphProperties& properties,
                                   std::ostream& os) const {
   os << node->name() << " [" << node->op() << "]" << std::endl;
   if (properties.HasOutputProperties(node->name())) {
-    const std::vector<OpInfo::TensorProperties>& props =
+    std::vector<OpInfo::TensorProperties> props =
         properties.GetOutputProperties(node->name());
     for (int i = 0; i < props.size(); ++i) {
       const OpInfo::TensorProperties& prop = props[i];
@@ -74,27 +73,6 @@ void ModelAnalyzer::PrintNodeInfo(const NodeDef* node,
         os << "]";
       }
       os << std::endl;
-    }
-  }
-
-  if (debug) {
-    const OpRegistrationData* op_reg_data;
-    Status status = OpRegistry::Global()->LookUp(node->op(), &op_reg_data);
-    if (!status.ok()) {
-      os << "\tCouldn't find op registration for " << node->op() << std::endl;
-    } else if (!op_reg_data->shape_inference_fn) {
-      os << "\tCouldn't find shape function for op " << node->op() << std::endl;
-    } else if (properties.HasInputProperties(node->name())) {
-      const std::vector<OpInfo::TensorProperties>& props =
-          properties.GetInputProperties(node->name());
-      for (int i = 0; i < props.size(); ++i) {
-        const OpInfo::TensorProperties& prop = props[i];
-        if (prop.has_value()) {
-          os << "\t"
-             << "input " << i << " (" << DataTypeString(prop.dtype())
-             << ") has known value" << std::endl;
-        }
-      }
     }
   }
 }

@@ -30,7 +30,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/dfs_hlo_visitor.h"
 #include "tensorflow/compiler/xla/service/gpu/convolution_thunk.h"
 #include "tensorflow/compiler/xla/service/gpu/copy_thunk.h"
-#include "tensorflow/compiler/xla/service/gpu/cudnn_batchnorm_thunk.h"
 #include "tensorflow/compiler/xla/service/gpu/for_thunk.h"
 #include "tensorflow/compiler/xla/service/gpu/gemm_thunk.h"
 #include "tensorflow/compiler/xla/service/gpu/hlo_to_ir_bindings.h"
@@ -276,103 +275,6 @@ Status IrEmitterUnnested::HandleConvolution(HloInstruction* convolution) {
   return IrEmitter::HandleConvolution(convolution);
 }
 
-Status IrEmitterUnnested::HandleCustomCall(HloInstruction* custom_call) {
-  // A CustomCall on the GPU backend can either be a custom-call to a
-  // user-supplied kernel, or a call into a library like cudnn.
-
-  // Lower custom-calls to cudnn batchnorm ops to specialized thunks.  It's part
-  // of the contract of these cudnn batchnorm calls that the epsilon and
-  // feature_index operands be constants.
-  if (custom_call->custom_call_target() ==
-      kCudnnBatchNormForwardInferenceCallTarget) {
-    const HloInstruction* epsilon = custom_call->operand(5);
-    CHECK(epsilon->IsConstant());
-    float epsilon_value = epsilon->literal().Get<float>({});
-
-    const HloInstruction* feature_index = custom_call->operand(6);
-    CHECK(feature_index->IsConstant());
-    int64 feature_index_value = feature_index->literal().Get<int64>({});
-
-    thunk_sequence_->emplace_back(
-        MakeUnique<CudnnBatchNormForwardInferenceThunk>(
-            /*operand=*/GetAllocationSlice(*custom_call->operand(0)),
-            /*scale=*/GetAllocationSlice(*custom_call->operand(1)),
-            /*offset=*/GetAllocationSlice(*custom_call->operand(2)),
-            /*mean=*/GetAllocationSlice(*custom_call->operand(3)),
-            /*variance=*/GetAllocationSlice(*custom_call->operand(4)),
-            /*epsilon=*/epsilon_value,
-            /*feature_index=*/feature_index_value,
-            /*output=*/GetAllocationSlice(*custom_call),
-            /*hlo=*/custom_call));
-    return Status::OK();
-  }
-
-  if (custom_call->custom_call_target() ==
-      kCudnnBatchNormForwardTrainingCallTarget) {
-    const HloInstruction* epsilon = custom_call->operand(3);
-    CHECK(epsilon->IsConstant());
-    float epsilon_value = epsilon->literal().Get<float>({});
-
-    const HloInstruction* feature_index = custom_call->operand(4);
-    CHECK(feature_index->IsConstant());
-    int64 feature_index_value = feature_index->literal().Get<int64>({});
-
-    // BatchNormTraining returns a tuple of three elements: data, calculated
-    // mean, and calculated 1/sqrt(variance + epsilon).
-    const auto& assn = ir_emitter_context_->buffer_assignment();
-    auto output_data = assn.GetUniqueSlice(custom_call, {0}).ValueOrDie();
-    auto output_mean = assn.GetUniqueSlice(custom_call, {1}).ValueOrDie();
-    auto output_inv_stddev = assn.GetUniqueSlice(custom_call, {2}).ValueOrDie();
-    thunk_sequence_->emplace_back(
-        MakeUnique<CudnnBatchNormForwardTrainingThunk>(
-            /*operand=*/GetAllocationSlice(*custom_call->operand(0)),
-            /*scale=*/GetAllocationSlice(*custom_call->operand(1)),
-            /*offset=*/GetAllocationSlice(*custom_call->operand(2)),
-            /*epsilon=*/epsilon_value,
-            /*feature_index=*/feature_index_value,
-            /*output_data=*/output_data,
-            /*output_mean=*/output_mean,
-            /*output_inv_stddev=*/output_inv_stddev,
-            /*output_tuple=*/GetAllocationSlice(*custom_call),
-            /*hlo=*/custom_call));
-    return Status::OK();
-  }
-
-  if (custom_call->custom_call_target() == kCudnnBatchNormBackwardCallTarget) {
-    const HloInstruction* epsilon = custom_call->operand(5);
-    CHECK(epsilon->IsConstant());
-    float epsilon_value = epsilon->literal().Get<float>({});
-
-    const HloInstruction* feature_index = custom_call->operand(6);
-    CHECK(feature_index->IsConstant());
-    int64 feature_index_value = feature_index->literal().Get<int64>({});
-
-    // BatchNormGrad returns a tuple of three elements: grad_data, grad_scale,
-    // grad_offset.
-    const auto& assn = ir_emitter_context_->buffer_assignment();
-    auto output_grad_data = assn.GetUniqueSlice(custom_call, {0}).ValueOrDie();
-    auto output_grad_scale = assn.GetUniqueSlice(custom_call, {1}).ValueOrDie();
-    auto output_grad_offset =
-        assn.GetUniqueSlice(custom_call, {2}).ValueOrDie();
-    thunk_sequence_->emplace_back(MakeUnique<CudnnBatchNormBackwardThunk>(
-        /*operand=*/GetAllocationSlice(*custom_call->operand(0)),
-        /*scale=*/GetAllocationSlice(*custom_call->operand(1)),
-        /*mean=*/GetAllocationSlice(*custom_call->operand(2)),
-        /*inv_stddev=*/GetAllocationSlice(*custom_call->operand(3)),
-        /*grad_output=*/GetAllocationSlice(*custom_call->operand(4)),
-        /*epsilon=*/epsilon_value,
-        /*feature_index=*/feature_index_value,
-        /*output_grad_data=*/output_grad_data,
-        /*output_grad_scale=*/output_grad_scale,
-        /*output_grad_offset=*/output_grad_offset,
-        /*output_tuple=*/GetAllocationSlice(*custom_call),
-        /*hlo=*/custom_call));
-    return Status::OK();
-  }
-
-  return IrEmitter::HandleCustomCall(custom_call);
-}
-
 Status IrEmitterUnnested::HandleFusion(HloInstruction* fusion) {
   HloInstruction* root = fusion->fused_expression_root();
   // HandleFusion specializes reduction from a multi-dimensional array to a 1D
@@ -517,8 +419,8 @@ Shape MergeDimensions(tensorflow::gtl::ArraySlice<size_t> segs,
             (segs.size() == i ? shape.dimensions().size() : segs[i]),
         1, std::multiplies<int64>()));
   }
-  return ShapeUtil::MakeShapeWithDescendingLayout(shape.element_type(),
-                                                  dimensions);
+  return ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(shape.element_type(),
+                                                          dimensions);
 }
 
 // Returns whether the given shapes and permutation are a 0-2-1 transpose, and
@@ -531,22 +433,20 @@ std::tuple<bool, Shape, Shape> IsTranspose021(const Shape& a, const Shape& b) {
   CHECK(ShapeUtil::Compatible(a, b));
   std::vector<int64> perm(a.dimensions().size());
   {
-    auto layout_a_orig = LayoutUtil::MinorToMajor(a);
-    std::vector<int64> layout_a(layout_a_orig.rbegin(), layout_a_orig.rend());
-    auto layout_b_orig = LayoutUtil::MinorToMajor(b);
-    std::vector<int64> layout_b(layout_b_orig.rbegin(), layout_b_orig.rend());
+    std::vector<int64> layout_a(a.layout().minor_to_major().rbegin(),
+                                a.layout().minor_to_major().rend());
+    std::vector<int64> layout_b(b.layout().minor_to_major().rbegin(),
+                                b.layout().minor_to_major().rend());
     for (size_t i = 0; i < perm.size(); ++i) {
       perm[i] = PositionInContainer(layout_b, layout_a[i]);
     }
   }
   auto segs = ConsecutiveSegments(perm);
-  Shape norm_a =
-      ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(a);
-  Shape norm_b =
-      ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(b);
+  Shape norm_a = ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(a);
+  Shape norm_b = ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(b);
   if (3 == segs.size() && 0 == perm[0]) {
     Shape reduced_a = MergeDimensions(segs, norm_a);
-    Shape reduced_b = ShapeUtil::MakeShapeWithDescendingLayout(
+    Shape reduced_b = ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
         b.element_type(),
         Permute({0, 2, 1}, AsInt64Slice(reduced_a.dimensions())));
     return std::make_tuple(true, reduced_a, reduced_b);
@@ -560,11 +460,10 @@ std::tuple<bool, Shape, Shape> IsTranspose021(const Shape& a, const Shape& b) {
 bool AreShapesForTranspose021(const Shape& a, const Shape& b) {
   return 3 == b.dimensions().size() &&
          ShapeUtil::Compatible(
-             ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(a),
+             ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(a),
              ShapeUtil::PermuteDimensions(
                  {0, 2, 1},
-                 ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
-                     b)));
+                 ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(b)));
 }
 
 // Emits a tiled 0-2-1 transpose, assuming both input and output lain out from
@@ -596,11 +495,9 @@ int64 EmitTranspose021Tiled(llvm_ir::IrArray input, llvm_ir::IrArray output,
   CHECK(AreShapesForTranspose021(input.GetShape(), output.GetShape()));
 
   Shape input_shape =
-      ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
-          input.GetShape());
+      ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(input.GetShape());
   Shape output_shape =
-      ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
-          output.GetShape());
+      ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(output.GetShape());
   input = input.CastToShape(input_shape, builder);
   output = output.CastToShape(output_shape, builder);
 
@@ -718,7 +615,7 @@ int64 EmitTranspose021Tiled(llvm_ir::IrArray input, llvm_ir::IrArray output,
                   llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x, {}, {},
                   builder))),
           builder->getInt64Ty(), /*isSigned=*/true, "block.id.x"),
-      ShapeUtil::MakeShapeWithDescendingLayout(
+      ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
           PRED /*arbitrary*/, AsInt64Slice(input_dims_in_tiles)),
       builder);
   const llvm_ir::IrArray::Index input_tile_origin = ({
@@ -914,15 +811,14 @@ Status IrEmitterUnnested::EmitColumnReduction(
         // input_shape to normalized_input_shape and a reshape from
         // normalized_input_shape to input_matrix_shape.
         const Shape normalized_input_shape =
-            ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
-                input_shape);
-        auto input_shape_min2maj = LayoutUtil::MinorToMajor(input_shape);
+            ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(input_shape);
         const std::vector<int64> transpose_dimension_mapping(
-            input_shape_min2maj.rbegin(), input_shape_min2maj.rend());
+            input_shape.layout().minor_to_major().rbegin(),
+            input_shape.layout().minor_to_major().rend());
 
         const Shape input_matrix_shape =
-            ShapeUtil::MakeShapeWithDescendingLayout(input_shape.element_type(),
-                                                     {height, width});
+            ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
+                input_shape.element_type(), {height, width});
         const llvm_ir::IrArray::Index input_matrix_index(
             {y, x}, input_matrix_shape, &ir_builder_);
         const llvm_ir::IrArray::Index input_index =
@@ -1158,14 +1054,13 @@ Status IrEmitterUnnested::EmitRowReduction(
         // from input_shape to normalized_input_shape and a reshape from
         // normalized_input_shape to input_3d_tensor_shape.
         const Shape normalized_input_shape =
-            ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
-                input_shape);
-        auto input_shape_min2maj = LayoutUtil::MinorToMajor(input_shape);
+            ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(input_shape);
         const std::vector<int64> transpose_dimension_mapping(
-            input_shape_min2maj.rbegin(), input_shape_min2maj.rend());
+            input_shape.layout().minor_to_major().rbegin(),
+            input_shape.layout().minor_to_major().rend());
         const Shape input_3d_tensor_shape =
-            ShapeUtil::MakeShapeWithDescendingLayout(input_shape.element_type(),
-                                                     {depth, height, width});
+            ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
+                input_shape.element_type(), {depth, height, width});
         const llvm_ir::IrArray::Index input_3d_tensor_index(
             {z, y, x}, input_3d_tensor_shape, &ir_builder_);
         const llvm_ir::IrArray::Index input_index =
@@ -1294,9 +1189,9 @@ Status IrEmitterUnnested::EmitReductionToVector(
   // whether another dimension is major or minor of them.
   std::sort(input_dims_to_keep.begin(), input_dims_to_keep.end(),
             [&input_shape](int64 dim_a, int64 dim_b) {
-              return PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+              return PositionInContainer(input_shape.layout().minor_to_major(),
                                          dim_a) <
-                     PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+                     PositionInContainer(input_shape.layout().minor_to_major(),
                                          dim_b);
             });
   // Now, if output rank is at least 1, `input_dims_to_keep.front()` is
@@ -1341,14 +1236,14 @@ Status IrEmitterUnnested::EmitReductionToVector(
     int64 width = 1;
     for (int64 input_dim = 0; input_dim < ShapeUtil::Rank(input_shape);
          ++input_dim) {
-      if (PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+      if (PositionInContainer(input_shape.layout().minor_to_major(),
                               input_dim) >
-          PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+          PositionInContainer(input_shape.layout().minor_to_major(),
                               input_dims_to_keep.back())) {
         depth *= input_shape.dimensions(input_dim);
-      } else if (PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+      } else if (PositionInContainer(input_shape.layout().minor_to_major(),
                                      input_dim) <
-                 PositionInContainer(LayoutUtil::MinorToMajor(input_shape),
+                 PositionInContainer(input_shape.layout().minor_to_major(),
                                      input_dims_to_keep.front())) {
         width *= input_shape.dimensions(input_dim);
       }

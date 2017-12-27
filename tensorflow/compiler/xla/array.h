@@ -22,7 +22,6 @@ limitations under the License.
 #include <initializer_list>
 #include <iterator>
 #include <memory>
-#include <numeric>
 #include <random>
 #include <type_traits>
 #include <vector>

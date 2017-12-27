@@ -105,17 +105,6 @@ typedef struct {
 } TfLiteAddParams;
 
 typedef struct {
-  // Number of spatial dimensions.
-  // For now only NHWC is supported, and the value should always be 2.
-  int num_spatial_dimensions;
-  // TODO(ahentz): We can't have dynamic data in this struct, at least not yet.
-  // For now we will fix the maximum possible number of dimensions.
-  int block_shape[2];
-  int before_crops[2];
-  int after_crops[2];
-} TfLiteBatchToSpaceNDParams;
-
-typedef struct {
   TfLiteFusedActivation activation;
 } TfLiteMulParams;
 
@@ -144,14 +133,6 @@ typedef struct {
 typedef struct {
   // TODO(ahentz): We can't have dynamic data in this struct, at least not yet.
   // For now we will fix the maximum possible number of dimensions.
-  int before_padding[8];
-  int after_padding[8];
-  int num_dimensions;
-} TfLitePadParams;
-
-typedef struct {
-  // TODO(ahentz): We can't have dynamic data in this struct, at least not yet.
-  // For now we will fix the maximum possible number of dimensions.
   int shape[8];
   int num_dimensions;
 } TfLiteReshapeParams;
@@ -175,10 +156,6 @@ typedef enum {
 typedef struct {
   TfLiteCombinerType combiner;
 } TfLiteEmbeddingLookupSparseParams;
-
-typedef struct {
-  int axis;
-} TfLiteGatherParams;
 
 #ifdef __cplusplus
 }  // extern "C"

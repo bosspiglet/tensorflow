@@ -96,9 +96,6 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   Status HandleCustomCall(HloInstruction* custom_call) override;
   Status HandleRng(HloInstruction* random) override;
   Status HandleConditional(HloInstruction* conditional) override;
-  Status HandleBatchNormInference(HloInstruction* batch_norm) override;
-  Status HandleBatchNormTraining(HloInstruction* batch_norm) override;
-  Status HandleBatchNormGrad(HloInstruction* batch_norm) override;
 
   Status FinishVisit(HloInstruction* root) override { return Status::OK(); }
 
@@ -240,7 +237,6 @@ class IrEmitterUnnested : public IrEmitter {
   Status HandleCopy(HloInstruction* copy) override;
   Status HandleConditional(HloInstruction* conditional) override;
   Status HandleConvolution(HloInstruction* convolution) override;
-  Status HandleCustomCall(HloInstruction* custom_call) override;
   Status HandleDot(HloInstruction* dot) override;
   Status HandleFusion(HloInstruction* fusion) override;
   Status HandleGetTupleElement(HloInstruction* get_tuple_element) override;

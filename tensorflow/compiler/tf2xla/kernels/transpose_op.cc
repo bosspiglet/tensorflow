@@ -72,9 +72,8 @@ class TransposeOp : public XlaOpKernel {
       }
     }
     for (int i = 0; i < dims; ++i) {
-      OP_REQUIRES(
-          ctx, bits[i],
-          errors::InvalidArgument(i, " is missing from 'perm' argument."));
+      OP_REQUIRES(ctx, bits[i], errors::InvalidArgument(
+                                    i, " is missing from 'perm' argument."));
     }
 
     // 0-D, 1-D, and identity transposes do nothing.
@@ -88,7 +87,7 @@ class TransposeOp : public XlaOpKernel {
   }
 };
 
-REGISTER_XLA_OP(Name("Transpose").CompileTimeConstInput("perm"), TransposeOp);
+REGISTER_XLA_OP(Name("Transpose"), TransposeOp);
 
 // InvertPermutation frequently forms part of the gradient of Transpose.
 //
@@ -104,9 +103,8 @@ class InvertPermutationOp : public XlaOpKernel {
   explicit InvertPermutationOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {}
 
   void Compile(XlaOpKernelContext* ctx) override {
-    OP_REQUIRES(ctx,
-                FastBoundsCheck(ctx->InputShape(0).num_elements(),
-                                std::numeric_limits<int32>::max()),
+    OP_REQUIRES(ctx, FastBoundsCheck(ctx->InputShape(0).num_elements(),
+                                     std::numeric_limits<int32>::max()),
                 errors::InvalidArgument("permutation of nonnegative int32s "
                                         "must have <= int32 max elements"));
 
@@ -130,9 +128,7 @@ class InvertPermutationOp : public XlaOpKernel {
   }
 };
 
-REGISTER_XLA_OP(Name("InvertPermutation")
-                    .TypeConstraint("T", DT_INT32)
-                    .CompileTimeConstInput("x"),
+REGISTER_XLA_OP(Name("InvertPermutation").TypeConstraint("T", DT_INT32),
                 InvertPermutationOp);
 
 }  // namespace

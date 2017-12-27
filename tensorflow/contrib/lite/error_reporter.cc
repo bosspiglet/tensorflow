@@ -39,9 +39,7 @@ int ErrorReporter::ReportError(void*, const char* format, ...) {
 }
 
 int StderrReporter::Report(const char* format, va_list args) {
-  const int result = vfprintf(stderr, format, args);
-  fputc('\n', stderr);
-  return result;
+  return vfprintf(stderr, format, args);
 }
 
 ErrorReporter* DefaultErrorReporter() {

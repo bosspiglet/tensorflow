@@ -265,7 +265,7 @@ class _LayerRNNCell(RNNCell):
   `call` methods do not access Variables `tf.get_variable`.
   """
 
-  def __call__(self, inputs, state, scope=None, *args, **kwargs):
+  def __call__(self, inputs, state, scope=None):
     """Run this RNN cell on inputs, starting from the given state.
 
     Args:
@@ -274,9 +274,8 @@ class _LayerRNNCell(RNNCell):
         with shape `[batch_size, self.state_size]`.  Otherwise, if
         `self.state_size` is a tuple of integers, this should be a tuple
         with shapes `[batch_size, s] for s in self.state_size`.
-      scope: optional cell scope.
-      *args: Additional positional arguments.
-      **kwargs: Additional keyword arguments.
+      scope: `VariableScope` for the created subgraph; if not provided,
+        defaults to standard `tf.layers.Layer` behavior.
 
     Returns:
       A pair containing:
@@ -288,8 +287,7 @@ class _LayerRNNCell(RNNCell):
     # Bypass RNNCell's variable capturing semantics for LayerRNNCell.
     # Instead, it is up to subclasses to provide a proper build
     # method.  See the class docstring for more details.
-    return base_layer.Layer.__call__(self, inputs, state, scope=scope,
-                                     *args, **kwargs)
+    return base_layer.Layer.__call__(self, inputs, state, scope=scope)
 
 
 class BasicRNNCell(_LayerRNNCell):
@@ -1039,7 +1037,7 @@ class DropoutWrapper(RNNCell):
       inputs = self._dropout(inputs, "input",
                              self._recurrent_input_noise,
                              self._input_keep_prob)
-    output, new_state = self._cell(inputs, state, scope=scope)
+    output, new_state = self._cell(inputs, state, scope)
     if _should_dropout(self._state_keep_prob):
       # Identify which subsets of the state to perform dropout on and
       # which ones to keep.

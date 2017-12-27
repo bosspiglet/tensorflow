@@ -29,7 +29,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/map_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/ptr_util.h"
-#include "tensorflow/compiler/xla/service/hlo_instruction.h"
 #include "tensorflow/compiler/xla/service/hlo_opcode.h"
 #include "tensorflow/compiler/xla/service/hlo_query.h"
 #include "tensorflow/compiler/xla/service/shape_inference.h"
@@ -168,36 +167,10 @@ StatusOr<std::unique_ptr<Literal>> ElementWiseUnaryOpImpl(
 
 }  // namespace
 
-template <typename ReturnT, typename ElementwiseT>
+template <typename ReturnT>
 class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
  public:
   explicit TypedVisitor(HloEvaluator* p) : parent_(p) {}
-
-  // The following higher-order functions convert a function with ElementwiseT
-  // to a function with ReturnT.
-  std::function<ReturnT(ReturnT)> ConvertUnaryFunction(
-      const std::function<ElementwiseT(ElementwiseT)>& unary_op) {
-    return [&unary_op](ReturnT arg) {
-      return static_cast<ReturnT>(unary_op(static_cast<ElementwiseT>(arg)));
-    };
-  }
-  std::function<ReturnT(ReturnT, ReturnT)> ConvertBinaryFunction(
-      const std::function<ElementwiseT(ElementwiseT, ElementwiseT)>&
-          binary_op) {
-    return [&binary_op](ReturnT arg1, ReturnT arg2) {
-      return static_cast<ReturnT>(binary_op(static_cast<ElementwiseT>(arg1),
-                                            static_cast<ElementwiseT>(arg2)));
-    };
-  }
-  std::function<ReturnT(ReturnT, ReturnT, ReturnT)> ConvertTernaryFunction(
-      const std::function<ElementwiseT(ElementwiseT, ElementwiseT,
-                                       ElementwiseT)>& ternary_op) {
-    return [&ternary_op](ReturnT arg1, ReturnT arg2, ReturnT arg3) {
-      return static_cast<ReturnT>(ternary_op(static_cast<ElementwiseT>(arg1),
-                                             static_cast<ElementwiseT>(arg2),
-                                             static_cast<ElementwiseT>(arg3)));
-    };
-  }
 
   Status DefaultAction(HloInstruction* hlo_instruction) override {
     return Unimplemented("unhandled HLO ops for HloEvaluator: %s.",
@@ -224,25 +197,24 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                               is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleAbs(HloInstruction* abs) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[abs],
-                        ElementWiseUnaryOp(abs, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(abs, [](NativeT elem_operand) {
                           return std::abs(elem_operand);
                         }));
     return Status::OK();
   }
 
   Status HandleAbs(HloInstruction* abs) override {
-    return HandleAbs<ElementwiseT>(abs);
+    return HandleAbs<ReturnT>(abs);
   }
 
   template <
       typename NativeT,
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleRound(HloInstruction* round) {
-    TF_ASSIGN_OR_RETURN(
-        parent_->evaluated_[round],
-        ElementWiseUnaryOp(round, [](ElementwiseT elem_operand) {
-          return std::round(elem_operand);
-        }));
+    TF_ASSIGN_OR_RETURN(parent_->evaluated_[round],
+                        ElementWiseUnaryOp(round, [](ReturnT elem_operand) {
+                          return std::round(elem_operand);
+                        }));
     return Status::OK();
   }
 
@@ -292,7 +264,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleCeil(HloInstruction* ceil) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[ceil],
-                        ElementWiseUnaryOp(ceil, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(ceil, [](ReturnT elem_operand) {
                           return std::ceil(elem_operand);
                         }));
     return Status::OK();
@@ -327,7 +299,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
 
   Status HandleExp(HloInstruction* exp) override {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[exp],
-                        ElementWiseUnaryOp(exp, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(exp, [](ReturnT elem_operand) {
                           return std::exp(elem_operand);
                         }));
     return Status::OK();
@@ -337,11 +309,10 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       typename NativeT,
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleFloor(HloInstruction* floor) {
-    TF_ASSIGN_OR_RETURN(
-        parent_->evaluated_[floor],
-        ElementWiseUnaryOp(floor, [](ElementwiseT elem_operand) {
-          return std::floor(elem_operand);
-        }));
+    TF_ASSIGN_OR_RETURN(parent_->evaluated_[floor],
+                        ElementWiseUnaryOp(floor, [](ReturnT elem_operand) {
+                          return std::floor(elem_operand);
+                        }));
     return Status::OK();
   }
 
@@ -358,7 +329,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
 
   Status HandleLog(HloInstruction* log) override {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[log],
-                        ElementWiseUnaryOp(log, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(log, [](ReturnT elem_operand) {
                           return std::log(elem_operand);
                         }));
     return Status::OK();
@@ -370,7 +341,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                 !std::is_same<NativeT, bool>::value>::type* = nullptr>
   Status HandleNot(HloInstruction* not_) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[not_],
-                        ElementWiseUnaryOp(not_, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(not_, [](ReturnT elem_operand) {
                           return ~elem_operand;
                         }));
     return Status::OK();
@@ -380,7 +351,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                                   NativeT>::value>::type* = nullptr>
   Status HandleNot(HloInstruction* not_) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[not_],
-                        ElementWiseUnaryOp(not_, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(not_, [](ReturnT elem_operand) {
                           return !elem_operand;
                         }));
     return Status::OK();
@@ -391,7 +362,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                 nullptr>
   Status HandleNot(HloInstruction* not_) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[not_],
-                        ElementWiseUnaryOp(not_, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(not_, [](ReturnT elem_operand) {
                           return !elem_operand;
                         }));
     return Status::OK();
@@ -405,7 +376,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleNot(HloInstruction* not_) override {
-    return HandleNot<ElementwiseT>(not_);
+    return HandleNot<ReturnT>(not_);
   }
 
   template <typename NativeT,
@@ -414,11 +385,10 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                 !std::is_floating_point<NativeT>::value>::type* = nullptr>
   Status HandleNegate(HloInstruction* negate) {
     using type = typename std::make_unsigned<NativeT>::type;
-    TF_ASSIGN_OR_RETURN(
-        parent_->evaluated_[negate],
-        ElementWiseUnaryOp(negate, [](ElementwiseT elem_operand) {
-          return NativeT(-type(elem_operand));
-        }));
+    TF_ASSIGN_OR_RETURN(parent_->evaluated_[negate],
+                        ElementWiseUnaryOp(negate, [](ReturnT elem_operand) {
+                          return NativeT(-type(elem_operand));
+                        }));
     return Status::OK();
   }
 
@@ -427,10 +397,10 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                 !std::is_signed<NativeT>::value ||
                 std::is_floating_point<NativeT>::value>::type* = nullptr>
   Status HandleNegate(HloInstruction* negate) {
-    TF_ASSIGN_OR_RETURN(
-        parent_->evaluated_[negate],
-        ElementWiseUnaryOp(
-            negate, [](ElementwiseT elem_operand) { return -elem_operand; }));
+    TF_ASSIGN_OR_RETURN(parent_->evaluated_[negate],
+                        ElementWiseUnaryOp(negate, [](ReturnT elem_operand) {
+                          return -elem_operand;
+                        }));
     return Status::OK();
   }
 
@@ -443,9 +413,9 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleSign(HloInstruction* sign) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[sign],
-                        ElementWiseUnaryOp(sign, [](ElementwiseT elem_operand) {
-                          return (ElementwiseT(0) < elem_operand) -
-                                 (elem_operand < ElementwiseT(0));
+                        ElementWiseUnaryOp(sign, [](ReturnT elem_operand) {
+                          return (ReturnT(0) < elem_operand) -
+                                 (elem_operand < ReturnT(0));
                         }));
     return Status::OK();
   }
@@ -455,9 +425,9 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       typename std::enable_if<is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleSign(HloInstruction* sign) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[sign],
-                        ElementWiseUnaryOp(sign, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(sign, [](ReturnT elem_operand) {
                           auto abs_val = std::abs(elem_operand);
-                          return 0 == abs_val ? ElementwiseT(0)
+                          return 0 == abs_val ? ReturnT(0)
                                               : elem_operand / abs_val;
                         }));
     return Status::OK();
@@ -469,7 +439,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
 
   Status HandleTanh(HloInstruction* tanh) override {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[tanh],
-                        ElementWiseUnaryOp(tanh, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(tanh, [](ReturnT elem_operand) {
                           return std::tanh(elem_operand);
                         }));
     return Status::OK();
@@ -483,10 +453,9 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     using type = typename std::make_unsigned<NativeT>::type;
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[multiply],
-        ElementWiseBinaryOp(multiply,
-                            [](ElementwiseT lhs_elem, ElementwiseT rhs_elem) {
-                              return NativeT(type(lhs_elem) * type(rhs_elem));
-                            }));
+        ElementWiseBinaryOp(multiply, [](ReturnT lhs_elem, ReturnT rhs_elem) {
+          return NativeT(type(lhs_elem) * type(rhs_elem));
+        }));
     return Status::OK();
   }
 
@@ -498,42 +467,40 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleMultiply(HloInstruction* multiply) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[multiply],
-        ElementWiseBinaryOp(multiply,
-                            [](ElementwiseT lhs_elem, ElementwiseT rhs_elem) {
-                              return lhs_elem * rhs_elem;
-                            }));
+        ElementWiseBinaryOp(multiply, [](ReturnT lhs_elem, ReturnT rhs_elem) {
+          return lhs_elem * rhs_elem;
+        }));
     return Status::OK();
   }
 
   Status HandleMultiply(HloInstruction* multiply) override {
-    return HandleMultiply<ElementwiseT>(multiply);
+    return HandleMultiply<ReturnT>(multiply);
   }
 
   Status HandleSubtract(HloInstruction* subtract) override {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[subtract],
-        ElementWiseBinaryOp(subtract,
-                            [](ElementwiseT lhs_elem, ElementwiseT rhs_elem) {
-                              return lhs_elem - rhs_elem;
-                            }));
+        ElementWiseBinaryOp(subtract, [](ReturnT lhs_elem, ReturnT rhs_elem) {
+          return lhs_elem - rhs_elem;
+        }));
     return Status::OK();
   }
 
   Status HandleAdd(HloInstruction* add) override {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[add],
-                        ElementWiseBinaryOp(add, [](ElementwiseT lhs_elem,
-                                                    ElementwiseT rhs_elem) {
-                          return lhs_elem + rhs_elem;
-                        }));
+    TF_ASSIGN_OR_RETURN(
+        parent_->evaluated_[add],
+        ElementWiseBinaryOp(add, [](ReturnT lhs_elem, ReturnT rhs_elem) {
+          return lhs_elem + rhs_elem;
+        }));
     return Status::OK();
   }
 
   Status HandleDivide(HloInstruction* divide) override {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[divide],
-                        ElementWiseBinaryOp(divide, [](ElementwiseT lhs_elem,
-                                                       ElementwiseT rhs_elem) {
-                          return lhs_elem / rhs_elem;
-                        }));
+    TF_ASSIGN_OR_RETURN(
+        parent_->evaluated_[divide],
+        ElementWiseBinaryOp(divide, [](ReturnT lhs_elem, ReturnT rhs_elem) {
+          return lhs_elem / rhs_elem;
+        }));
     return Status::OK();
   }
 
@@ -543,7 +510,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleMaximum(HloInstruction* maximum) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[maximum],
-        ElementWiseBinaryOp(maximum, [](ElementwiseT lhs, ElementwiseT rhs) {
+        ElementWiseBinaryOp(maximum, [](ReturnT lhs, ReturnT rhs) {
           return std::fmax(lhs, rhs);
         }));
     return Status::OK();
@@ -557,18 +524,18 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleMaximum(HloInstruction* maximum) override {
-    return HandleMaximum<ElementwiseT>(maximum);
+    return HandleMaximum<ReturnT>(maximum);
   }
 
   template <
       typename NativeT,
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleMinimum(HloInstruction* minimum) {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[minimum],
-                        ElementWiseBinaryOp(minimum, [](ElementwiseT lhs_el,
-                                                        ElementwiseT rhs_el) {
-                          return std::fmin(lhs_el, rhs_el);
-                        }));
+    TF_ASSIGN_OR_RETURN(
+        parent_->evaluated_[minimum],
+        ElementWiseBinaryOp(minimum, [](ReturnT lhs_el, ReturnT rhs_el) {
+          return std::fmin(lhs_el, rhs_el);
+        }));
     return Status::OK();
   }
 
@@ -580,15 +547,15 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleMinimum(HloInstruction* minimum) override {
-    return HandleMinimum<ElementwiseT>(minimum);
+    return HandleMinimum<ReturnT>(minimum);
   }
 
   Status HandlePower(HloInstruction* power) override {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[power],
-                        ElementWiseBinaryOp(power, [](ElementwiseT lhs_el,
-                                                      ElementwiseT rhs_el) {
-                          return std::pow(lhs_el, rhs_el);
-                        }));
+    TF_ASSIGN_OR_RETURN(
+        parent_->evaluated_[power],
+        ElementWiseBinaryOp(power, [](ReturnT lhs_el, ReturnT rhs_el) {
+          return std::pow(lhs_el, rhs_el);
+        }));
     return Status::OK();
   }
 
@@ -596,11 +563,11 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       typename NativeT,
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleRemainder(HloInstruction* remainder) {
-    TF_ASSIGN_OR_RETURN(parent_->evaluated_[remainder],
-                        ElementWiseBinaryOp(remainder, [](ElementwiseT lhs_el,
-                                                          ElementwiseT rhs_el) {
-                          return std::fmod(lhs_el, rhs_el);
-                        }));
+    TF_ASSIGN_OR_RETURN(
+        parent_->evaluated_[remainder],
+        ElementWiseBinaryOp(remainder, [](ReturnT lhs_el, ReturnT rhs_el) {
+          return std::fmod(lhs_el, rhs_el);
+        }));
     return Status::OK();
   }
 
@@ -612,7 +579,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleRemainder(HloInstruction* remainder) override {
-    return HandleRemainder<ElementwiseT>(remainder);
+    return HandleRemainder<ReturnT>(remainder);
   }
 
   template <typename NativeT,
@@ -621,7 +588,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleAnd(HloInstruction* and_) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[and_],
-        ElementWiseBinaryOp(and_, [](ElementwiseT lhs_el, ElementwiseT rhs_el) {
+        ElementWiseBinaryOp(and_, [](ReturnT lhs_el, ReturnT rhs_el) {
           return lhs_el & rhs_el;
         }));
     return Status::OK();
@@ -632,7 +599,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleAnd(HloInstruction* and_) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[and_],
-        ElementWiseBinaryOp(and_, [](ElementwiseT lhs_el, ElementwiseT rhs_el) {
+        ElementWiseBinaryOp(and_, [](ReturnT lhs_el, ReturnT rhs_el) {
           return lhs_el && rhs_el;
         }));
     return Status::OK();
@@ -646,7 +613,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleAnd(HloInstruction* and_) override {
-    return HandleAnd<ElementwiseT>(and_);
+    return HandleAnd<ReturnT>(and_);
   }
 
   template <typename NativeT,
@@ -655,7 +622,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleOr(HloInstruction* or_) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[or_],
-        ElementWiseBinaryOp(or_, [](ElementwiseT lhs_el, ElementwiseT rhs_el) {
+        ElementWiseBinaryOp(or_, [](ReturnT lhs_el, ReturnT rhs_el) {
           return lhs_el | rhs_el;
         }));
     return Status::OK();
@@ -666,7 +633,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   Status HandleOr(HloInstruction* or_) {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[or_],
-        ElementWiseBinaryOp(or_, [](ElementwiseT lhs_el, ElementwiseT rhs_el) {
+        ElementWiseBinaryOp(or_, [](ReturnT lhs_el, ReturnT rhs_el) {
           return lhs_el || rhs_el;
         }));
     return Status::OK();
@@ -680,7 +647,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleOr(HloInstruction* or_) override {
-    return HandleOr<ElementwiseT>(or_);
+    return HandleOr<ReturnT>(or_);
   }
 
   template <typename NativeT,
@@ -705,7 +672,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleShiftLeft(HloInstruction* shl) override {
-    return HandleShiftLeft<ElementwiseT>(shl);
+    return HandleShiftLeft<ReturnT>(shl);
   }
   template <typename NativeT,
             typename std::enable_if<
@@ -731,7 +698,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleShiftRightArithmetic(HloInstruction* shra) override {
-    return HandleShiftRightArithmetic<ElementwiseT>(shra);
+    return HandleShiftRightArithmetic<ReturnT>(shra);
   }
 
   template <typename NativeT,
@@ -758,21 +725,19 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleShiftRightLogical(HloInstruction* shrl) override {
-    return HandleShiftRightLogical<ElementwiseT>(shrl);
+    return HandleShiftRightLogical<ReturnT>(shrl);
   }
 
   template <
       typename NativeT,
       typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
   Status HandleClamp(HloInstruction* clamp) {
-    std::function<ElementwiseT(ElementwiseT, ElementwiseT, ElementwiseT)>
-        clamp_op = [](ElementwiseT low, ElementwiseT value, ElementwiseT high) {
+    std::function<ReturnT(ReturnT, ReturnT, ReturnT)> clamp_op =
+        [](ReturnT low, ReturnT value, ReturnT high) {
           return std::fmax(low, std::fmin(value, high));
         };
-    TF_ASSIGN_OR_RETURN(
-        parent_->evaluated_[clamp],
-        ElementwiseTernaryOp(clamp,
-                             std::move(ConvertTernaryFunction(clamp_op))));
+    TF_ASSIGN_OR_RETURN(parent_->evaluated_[clamp],
+                        ElementWiseTernaryOp(clamp, std::move(clamp_op)));
     return Status::OK();
   }
 
@@ -784,7 +749,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleClamp(HloInstruction* clamp) override {
-    return HandleClamp<ElementwiseT>(clamp);
+    return HandleClamp<ReturnT>(clamp);
   }
 
   Status HandleSelect(HloInstruction* select) override {
@@ -797,7 +762,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
           return on_false;
         };
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[select],
-                        ElementwiseTernaryOp(select, std::move(select_op)));
+                        ElementWiseTernaryOp(select, std::move(select_op)));
     return Status::OK();
   }
 
@@ -895,7 +860,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     DimensionVector rhs_spatial_index(dnums.kernel_spatial_dimensions_size());
 
     auto func = [&](tensorflow::gtl::ArraySlice<int64> out_index) {
-      ElementwiseT result_val = static_cast<ElementwiseT>(0);
+      ReturnT result_val = static_cast<ReturnT>(0);
 
       std::fill(lhs_index.begin(), lhs_index.end(), 0);
       std::fill(rhs_index.begin(), rhs_index.end(), 0);
@@ -946,14 +911,13 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                     : rhs_spatial_index[ki];
           }
 
-          result_val +=
-              static_cast<ElementwiseT>(lhs_literal.Get<ReturnT>(lhs_index)) *
-              static_cast<ElementwiseT>(rhs_literal.Get<ReturnT>(rhs_index));
+          result_val += lhs_literal.Get<ReturnT>(lhs_index) *
+                        rhs_literal.Get<ReturnT>(rhs_index);
         }
       cnt : {}
       } while (IndexUtil::BumpIndices(window_shape, &rhs_spatial_index));
 
-      return static_cast<ReturnT>(result_val);
+      return result_val;
     };
 
     auto result = Literal::CreateFromShape(result_shape);
@@ -1003,7 +967,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     auto result = Literal::CreateFromShape(dot->shape());
     TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
-          ElementwiseT result_val = static_cast<ElementwiseT>(0);
+          ReturnT result_val = static_cast<ReturnT>(0);
 
           std::vector<int64> lhs_index(lhs_rank, 0);
           std::vector<int64> rhs_index(rhs_rank, 0);
@@ -1020,12 +984,11 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
             lhs_index[lhs_contracted_dimension] = i;
             rhs_index[rhs_contracted_dimension] = i;
 
-            result_val +=
-                static_cast<ElementwiseT>(lhs_literal.Get<ReturnT>(lhs_index)) *
-                static_cast<ElementwiseT>(rhs_literal.Get<ReturnT>(rhs_index));
+            result_val += lhs_literal.Get<ReturnT>(lhs_index) *
+                          rhs_literal.Get<ReturnT>(rhs_index);
           }
 
-          return static_cast<ReturnT>(result_val);
+          return result_val;
         }));
 
     parent_->evaluated_[dot] = std::move(result);
@@ -1211,97 +1174,6 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     return Status::OK();
   }
 
-  template <typename NativeT>
-  StatusOr<std::unique_ptr<Literal>> MapImpl(HloInstruction* map) {
-    auto operands = map->operands();
-    HloComputation* computation = map->to_apply();
-
-    auto result = Literal::CreateFromShape(map->shape());
-
-    HloEvaluator embedded_evaluator;
-    TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
-        [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
-          std::vector<std::unique_ptr<Literal>> arg_literals;
-          arg_literals.reserve(operands.size());
-
-          // Construct scalar literal parameters to be passed to the map
-          // computation.
-          for (auto operand : operands) {
-            const Literal& arg_literal =
-                parent_->GetEvaluatedLiteralFor(operand);
-
-            auto curr_val = arg_literal.Get<NativeT>(multi_index);
-            auto curr_val_literal = Literal::CreateR0<NativeT>(curr_val);
-
-            arg_literals.push_back(std::move(curr_val_literal));
-          }
-
-          std::unique_ptr<Literal> computed_result =
-              embedded_evaluator
-                  .Evaluate<std::unique_ptr<Literal>>(*computation,
-                                                      arg_literals)
-                  .ConsumeValueOrDie();
-          // Clear visit states so that the we can use the evaluate again on
-          // the same computation.
-          embedded_evaluator.ResetVisitStates();
-
-          return computed_result->Get<ReturnT>({});
-        }));
-    return std::move(result);
-  }
-
-  Status HandleMap(HloInstruction* map) override {
-    switch (map->operand(0)->shape().element_type()) {
-      case PRED: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<bool>(map));
-        break;
-      }
-      case U8: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<uint8>(map));
-        break;
-      }
-      case U32: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<uint32>(map));
-        break;
-      }
-      case U64: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<uint64>(map));
-        break;
-      }
-      case S8: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<int8>(map));
-        break;
-      }
-      case S32: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<int32>(map));
-        break;
-      }
-      case S64: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<int64>(map));
-        break;
-      }
-      case F32: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<float>(map));
-        break;
-      }
-      case F64: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<double>(map));
-        break;
-      }
-      case C64: {
-        TF_ASSIGN_OR_RETURN(parent_->evaluated_[map], MapImpl<complex64>(map));
-        break;
-      }
-      default:
-        LOG(FATAL) << "HandleMap: unhandled primitive type for "
-                      "input operand: "
-                   << PrimitiveType_Name(
-                          map->operand(0)->shape().element_type());
-    }
-
-    return Status::OK();
-  }
-
   Status HandleReduce(HloInstruction* reduce) override {
     auto arg = reduce->operand(0);
     auto init_value = reduce->operand(1);
@@ -1348,7 +1220,6 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
       }
     }
 
-    HloEvaluator embedded_evaluator;
     // For each resulting dimension, calculate and assign computed value.
     TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
@@ -1368,12 +1239,13 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
             std::vector<const Literal*> args = {curr_val_literal.get(),
                                                 result_val_literal.get()};
 
+            // We need a new visitor for each evaluation, so that the same
+            // computation can be visited more than once (with different
+            // inputs).
+            HloEvaluator embedded_evaluator;
             std::unique_ptr<Literal> computed_result =
-                embedded_evaluator.Evaluate<const Literal*>(*function, args)
+                embedded_evaluator.Evaluate(*function, args)
                     .ConsumeValueOrDie();
-            // Clear visit states so that the we can use the evaluate again on
-            // the same computation.
-            embedded_evaluator.ResetVisitStates();
 
             // Assign computed result to result_val.
             result_val = computed_result->Get<ReturnT>({});
@@ -1430,7 +1302,6 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
     DimensionVector window_index(window.dimensions_size());
     DimensionVector operand_index(ShapeUtil::Rank(operand_literal.shape()));
 
-    HloEvaluator embedded_evaluator;
     // For each resulting dimension, calculate and assign computed value.
     TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> output_index) {
@@ -1462,13 +1333,13 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                 Literal::CreateR0<ReturnT>(result_val);
             const std::vector<const Literal*> args = {curr_val_literal.get(),
                                                       result_val_literal.get()};
+            // We need a new visitor for each evaluation, so that the same
+            // computation can be visited more than once (with different
+            // inputs).
+            HloEvaluator embedded_evaluator;
             std::unique_ptr<Literal> computed_result =
-                embedded_evaluator.Evaluate<const Literal*>(*function, args)
+                embedded_evaluator.Evaluate(*function, args)
                     .ConsumeValueOrDie();
-
-            // Clear visit states so that the we can use the evaluate again on
-            // the same computation.
-            embedded_evaluator.ResetVisitStates();
 
             result_val = computed_result->Get<ReturnT>({});
           } while (IndexUtil::BumpIndices(window_shape, &window_index));
@@ -1514,7 +1385,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
                                   NativeT>::value>::type* = nullptr>
   Status HandleSin(HloInstruction* sin) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[sin],
-                        ElementWiseUnaryOp(sin, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(sin, [](ReturnT elem_operand) {
                           return std::sin(elem_operand);
                         }));
     return Status::OK();
@@ -1529,14 +1400,14 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleSin(HloInstruction* sin) override {
-    return HandleSin<ElementwiseT>(sin);
+    return HandleSin<ReturnT>(sin);
   }
 
   template <typename NativeT, typename std::enable_if<std::is_floating_point<
                                   NativeT>::value>::type* = nullptr>
   Status HandleCos(HloInstruction* cos) {
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[cos],
-                        ElementWiseUnaryOp(cos, [](ElementwiseT elem_operand) {
+                        ElementWiseUnaryOp(cos, [](ReturnT elem_operand) {
                           return std::cos(elem_operand);
                         }));
     return Status::OK();
@@ -1551,7 +1422,7 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleCos(HloInstruction* cos) override {
-    return HandleCos<ElementwiseT>(cos);
+    return HandleCos<ReturnT>(cos);
   }
 
  private:
@@ -1616,27 +1487,22 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
 
   StatusOr<std::unique_ptr<Literal>> ElementWiseUnaryOp(
       HloInstruction* instruction,
-      const std::function<ElementwiseT(ElementwiseT)>& unary_op) {
+      const std::function<ReturnT(ReturnT)>& unary_op) {
     const Literal& operand_literal =
         parent_->GetEvaluatedLiteralFor(instruction->operand(0));
-    TF_ASSIGN_OR_RETURN(
-        auto result_literal,
-        (ElementWiseUnaryOpImpl<ReturnT, ReturnT>(
-            instruction, ConvertUnaryFunction(unary_op), operand_literal)));
-
-    return std::move(result_literal);
+    return ElementWiseUnaryOpImpl<ReturnT, ReturnT>(instruction, unary_op,
+                                                    operand_literal);
   }
 
   StatusOr<std::unique_ptr<Literal>> ElementWiseBinaryOp(
       HloInstruction* instruction,
-      const std::function<ElementwiseT(ElementwiseT, ElementwiseT)>&
-          binary_op) {
+      const std::function<ReturnT(ReturnT, ReturnT)>& binary_op) {
     const auto shape = instruction->shape();
     const auto* lhs = instruction->operand(0);
     const auto* rhs = instruction->operand(1);
 
-    // TODO(b/35950897, b/27796129): add DCHECK back once implicit broadcast
-    // is removed.
+    // TODO(b/35950897, b/27796129): add DCHECK back once implicit broadcast is
+    // removed.
     if (!(ShapeUtil::SameDimensions(shape, rhs->shape()) &&
           ShapeUtil::SameDimensions(lhs->shape(), rhs->shape()))) {
       return Unimplemented(
@@ -1654,15 +1520,14 @@ class HloEvaluator::TypedVisitor : public DfsHloVisitorWithDefault {
 
     TF_RETURN_IF_ERROR(result->Populate<ReturnT>(
         [&](tensorflow::gtl::ArraySlice<int64> multi_index) {
-          return ConvertBinaryFunction(binary_op)(
-              lhs_literal.Get<ReturnT>(multi_index),
-              rhs_literal.Get<ReturnT>(multi_index));
+          return binary_op(lhs_literal.Get<ReturnT>(multi_index),
+                           rhs_literal.Get<ReturnT>(multi_index));
         }));
     return std::move(result);
   }
 
   template <typename LhsType, typename RhsType, typename EhsType>
-  StatusOr<std::unique_ptr<Literal>> ElementwiseTernaryOp(
+  StatusOr<std::unique_ptr<Literal>> ElementWiseTernaryOp(
       HloInstruction* instruction,
       const std::function<ReturnT(LhsType, RhsType, EhsType)>& ternary_op) {
     const auto shape = instruction->shape();
@@ -1724,11 +1589,9 @@ HloEvaluator::HloEvaluator() {
   typed_visitors_[F64] = MakeUnique<TypedVisitor<double>>(this);
   typed_visitors_[C64] = MakeUnique<TypedVisitor<complex64>>(this);
 
-  // Most of the evaluator computations we use don't support BF16 (e.g.,
-  // std::ceil, std::tanh). To make evaluator work with BF16, we set all
-  // elementwise computations to be done in F32 and do BF16<->F32 conversion
-  // around the input and the output of the computations.
-  typed_visitors_[BF16] = MakeUnique<TypedVisitor<bfloat16, float>>(this);
+  typed_visitors_[BF16] = MakeUnique<FunctionVisitor>([](HloInstruction*) {
+    return Unimplemented("HloEvaluator: unhandled primitive type: BF16.");
+  });
   typed_visitors_[TUPLE] = MakeUnique<FunctionVisitor>([](HloInstruction*) {
     return Unimplemented("HloEvaluator: unhandled primitive type: TUPLE.");
   });
@@ -1737,17 +1600,13 @@ HloEvaluator::HloEvaluator() {
   });
 }
 
-template <typename LiteralPtr>
 StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
     const HloModule& module,
-    tensorflow::gtl::ArraySlice<LiteralPtr> arg_literals) {
+    tensorflow::gtl::ArraySlice<const Literal*> arg_literals) {
   XLA_VLOG_LINES(2, "HloEvaluator::Evaluate module:\n" + module.ToString());
 
+  arg_literals_ = arg_literals;
   evaluated_.clear();
-  arg_literals_.clear();
-  for (const auto& literal_ptr : arg_literals) {
-    arg_literals_.push_back(&*literal_ptr);
-  }
 
   TF_RETURN_IF_ERROR(module.entry_computation()->Accept(this));
 
@@ -1755,36 +1614,27 @@ StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
       GetEvaluatedLiteralFor(module.entry_computation()->root_instruction()));
 }
 
-template <typename LiteralPtr>
 StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
     const HloComputation& computation,
-    tensorflow::gtl::ArraySlice<LiteralPtr> arg_literals) {
+    tensorflow::gtl::ArraySlice<const Literal*> arg_literals) {
   XLA_VLOG_LINES(
       2, "HloEvaluator::Evaluate computation:\n" + computation.ToString());
-
+  arg_literals_ = arg_literals;
   evaluated_.clear();
-  arg_literals_.clear();
-  for (const auto& literal_ptr : arg_literals) {
-    arg_literals_.push_back(&*literal_ptr);
-  }
 
   TF_RETURN_IF_ERROR(computation.Accept(this));
   return MakeUnique<Literal>(
       GetEvaluatedLiteralFor(computation.root_instruction()));
 }
 
-template <typename LiteralPtr>
 StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate(
     HloInstruction* instruction,
-    tensorflow::gtl::ArraySlice<LiteralPtr> arg_literals) {
+    tensorflow::gtl::ArraySlice<const Literal*> operands) {
   TF_RET_CHECK(hlo_query::AllOperandsAreParametersOrConstants(*instruction));
   TF_RETURN_IF_ERROR(ShapeUtil::ValidateShape(instruction->shape()));
 
+  arg_literals_ = operands;
   evaluated_.clear();
-  arg_literals_.clear();
-  for (const auto& literal_ptr : arg_literals) {
-    arg_literals_.push_back(&*literal_ptr);
-  }
 
   // Evaluate operands of Parameter type against the input literals which
   // caches the evaluated literal results.
@@ -1872,13 +1722,9 @@ StatusOr<std::unique_ptr<Literal>> HloEvaluator::EvaluateWithSubstitutions(
 }
 
 Status HloEvaluator::HandleParameter(HloInstruction* parameter) {
-  CHECK_LT(parameter->parameter_number(), arg_literals_.size());
   const Literal* input_literal = arg_literals_[parameter->parameter_number()];
   VLOG(2) << "Parameter evaluated to: " << input_literal->ToString();
-  DCHECK(ShapeUtil::Equal(parameter->shape(), input_literal->shape()))
-      << "parameter shape is: " << ShapeUtil::HumanString(parameter->shape())
-      << ", but input literal shape is: "
-      << ShapeUtil::HumanString(input_literal->shape());
+  DCHECK(ShapeUtil::Equal(parameter->shape(), input_literal->shape()));
 
   evaluated_[parameter] = MakeUnique<Literal>(*input_literal);
   return Status::OK();
@@ -1903,8 +1749,8 @@ Status HloEvaluator::HandleTranspose(HloInstruction* transpose) {
 Status HloEvaluator::HandleConcatenate(HloInstruction* concatenate) {
   tensorflow::gtl::ArraySlice<HloInstruction*> operands(
       concatenate->operands());
-  // The result concatenate dimension is going to be the sum of all
-  // concatenate dimensions of the operands taking part of the operation.
+  // The result concatenate dimension is going to be the sum of all concatenate
+  // dimensions of the operands taking part of the operation.
   const Shape& reference_shape = operands[0]->shape();
   CHECK(!ShapeUtil::IsTuple(reference_shape));
   const int64 rank = ShapeUtil::Rank(reference_shape);
@@ -2113,31 +1959,5 @@ Status HloEvaluator::Postprocess(HloInstruction* hlo) {
           << "; evaluated value is: " << GetEvaluatedLiteralFor(hlo).ToString();
   return Status::OK();
 }
-
-// Explicit instantiation of templatized Evaluate* methods.
-//
-template StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate<
-    const Literal*>(const HloModule& module,
-                    tensorflow::gtl::ArraySlice<const Literal*> arg_literals);
-template StatusOr<std::unique_ptr<Literal>>
-HloEvaluator::Evaluate<std::unique_ptr<Literal>>(
-    const HloModule& module,
-    tensorflow::gtl::ArraySlice<std::unique_ptr<Literal>> arg_literals);
-
-template StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate<
-    const Literal*>(const HloComputation& computation,
-                    tensorflow::gtl::ArraySlice<const Literal*> arg_literals);
-template StatusOr<std::unique_ptr<Literal>>
-HloEvaluator::Evaluate<std::unique_ptr<Literal>>(
-    const HloComputation& computation,
-    tensorflow::gtl::ArraySlice<std::unique_ptr<Literal>> arg_literals);
-
-template StatusOr<std::unique_ptr<Literal>> HloEvaluator::Evaluate<
-    const Literal*>(HloInstruction* instruction,
-                    tensorflow::gtl::ArraySlice<const Literal*> arg_literals);
-template StatusOr<std::unique_ptr<Literal>>
-HloEvaluator::Evaluate<std::unique_ptr<Literal>>(
-    HloInstruction* instruction,
-    tensorflow::gtl::ArraySlice<std::unique_ptr<Literal>> arg_literals);
 
 }  // namespace xla

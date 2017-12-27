@@ -33,28 +33,17 @@ StatusOr<int64> MinimumMemoryForSequence(
     const SequentialHloOrdering::HloModuleSequence& module_sequence,
     const LogicalBuffer::SizeFunction& size_function);
 
-enum class SchedulerAlgorithm {
-  kListSchedule,
-  kDfsSchedule,
-
-  // Selects the available scheduler algorithm that had the minimum memory in
-  // the resulting sequence (a la MinimumMemoryForSequence).
-  kAuto,
-};
-
 // Returns an HloModuleSequence which seeks to minimize the memory required for
 // the computation. size_function is the function returning the number of bytes
 // required for a LogicalBuffer.
 StatusOr<SequentialHloOrdering::HloModuleSequence>
 CreateMemoryMinimizingSequence(
-    const HloModule& module, const LogicalBuffer::SizeFunction& size_function,
-    SchedulerAlgorithm algorithm = SchedulerAlgorithm::kAuto);
+    const HloModule& module, const LogicalBuffer::SizeFunction& size_function);
 
 // Overload of above that computes the sequence for a single computation.
 StatusOr<std::vector<const HloInstruction*>> CreateMemoryMinimizingSequence(
     const HloComputation& computation,
-    const LogicalBuffer::SizeFunction& size_function,
-    SchedulerAlgorithm algorithm = SchedulerAlgorithm::kAuto);
+    const LogicalBuffer::SizeFunction& size_function);
 
 }  // namespace xla
 

@@ -555,7 +555,6 @@ py_test(
     tags = [
         "no_windows",
         "nomac",  # b/63258195
-        "notsan",
     ],
     deps = [
         ":random_forest",

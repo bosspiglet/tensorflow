@@ -53,8 +53,6 @@ class ArgOp : public OpKernel {
     ctx->set_output(0, val);
   }
 
-  bool IsExpensive() override { return false; }
-
  private:
   int index_;
   DataType dtype_;
@@ -79,8 +77,6 @@ class RetvalOp : public OpKernel {
     OP_REQUIRES(ctx, frame != nullptr, errors::Internal("no call frame"));
     OP_REQUIRES_OK(ctx, frame->SetRetval(index_, val));
   }
-
-  bool IsExpensive() override { return false; }
 
  private:
   int index_;

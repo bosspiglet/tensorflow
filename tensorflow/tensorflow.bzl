@@ -19,7 +19,6 @@ load(
     "//third_party/mkl:build_defs.bzl",
     "if_mkl",
 )
-
 def register_extension_info(**kwargs):
     pass
 
@@ -104,12 +103,6 @@ def if_ios(a):
       "//conditions:default": [],
   })
 
-def if_ios_x86_64(a):
-  return select({
-      clean_dep("//tensorflow:ios_x86_64"): a,
-      "//conditions:default": [],
-  })
-
 def if_mobile(a):
   return select({
       clean_dep("//tensorflow:android"): a,
@@ -150,27 +143,24 @@ def if_darwin(a):
       "//conditions:default": [],
   })
 
-def get_win_copts(is_external=False):
-    WINDOWS_COPTS = [
-        "/D__VERSION__=\\\"MSVC\\\"",
-        "/DPLATFORM_WINDOWS",
-        "/DEIGEN_HAS_C99_MATH",
-        "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
-        "/DEIGEN_AVOID_STL_ARRAY",
-        "/Iexternal/gemmlowp",
-        "/wd4018",  # -Wno-sign-compare
-        "/U_HAS_EXCEPTIONS",
-        "/D_HAS_EXCEPTIONS=1",
-        "/EHsc",  # -fno-exceptions
-        "/DNOGDI",
-    ]
-    if is_external:
-      return WINDOWS_COPTS + ["/UTF_COMPILE_LIBRARY"]
-    else:
-      return WINDOWS_COPTS + ["/DTF_COMPILE_LIBRARY"]
+WIN_COPTS = [
+    "/DLANG_CXX11",
+    "/D__VERSION__=\\\"MSVC\\\"",
+    "/DPLATFORM_WINDOWS",
+    "/DTF_COMPILE_LIBRARY",
+    "/DEIGEN_HAS_C99_MATH",
+    "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
+    "/DEIGEN_AVOID_STL_ARRAY",
+    "/Iexternal/gemmlowp",
+    "/wd4018",  # -Wno-sign-compare
+    "/U_HAS_EXCEPTIONS",
+    "/D_HAS_EXCEPTIONS=1",
+    "/EHsc",  # -fno-exceptions
+    "/DNOGDI",
+]
 
 # LINT.IfChange
-def tf_copts(android_optimization_level_override="-O2", is_external=False):
+def tf_copts(android_optimization_level_override="-O2"):
   # For compatibility reasons, android_optimization_level_override
   # is currently only being set for Android.
   # To clear this value, and allow the CROSSTOOL default
@@ -194,16 +184,11 @@ def tf_copts(android_optimization_level_override="-O2", is_external=False):
       + if_mkl(["-DINTEL_MKL=1", "-DEIGEN_USE_VML", "-fopenmp",])
       + if_android_arm(["-mfpu=neon"])
       + if_linux_x86_64(["-msse3"])
-      + if_ios_x86_64(["-msse4.1"])
-      + select({
-            "//tensorflow:framework_shared_object": [],
-            "//conditions:default": ["-DTENSORFLOW_MONOLITHIC_BUILD"],
-      })
       + select({
             clean_dep("//tensorflow:android"): android_copts,
             clean_dep("//tensorflow:darwin"): [],
-            clean_dep("//tensorflow:windows"): get_win_copts(is_external),
-            clean_dep("//tensorflow:windows_msvc"): get_win_copts(is_external),
+            clean_dep("//tensorflow:windows"): WIN_COPTS,
+            clean_dep("//tensorflow:windows_msvc"): WIN_COPTS,
             clean_dep("//tensorflow:ios"): ["-std=c++11"],
             "//conditions:default": ["-pthread"]
       }))
@@ -219,7 +204,7 @@ def tf_opts_nortti_if_android():
 
 # Given a list of "op_lib_names" (a list of files in the ops directory
 # without their .cc extensions), generate a library for that file.
-def tf_gen_op_libs(op_lib_names, deps=None, is_external=True):
+def tf_gen_op_libs(op_lib_names, deps=None):
   # Make library out of each op so it can also be used to generate wrappers
   # for various languages.
   if not deps:
@@ -227,7 +212,7 @@ def tf_gen_op_libs(op_lib_names, deps=None, is_external=True):
   for n in op_lib_names:
     native.cc_library(
         name=n + "_op_lib",
-        copts=tf_copts(is_external=is_external),
+        copts=tf_copts(),
         srcs=["ops/" + n + ".cc"],
         deps=deps + [clean_dep("//tensorflow/core:framework")],
         visibility=["//visibility:public"],
@@ -300,11 +285,9 @@ def tf_cc_binary(name,
                  srcs=[],
                  deps=[],
                  linkopts=[],
-                 copts=tf_copts(),
                  **kwargs):
   native.cc_binary(
       name=name,
-      copts=copts,
       srcs=srcs + tf_binary_additional_srcs(),
       deps=deps + if_mkl(
           [
@@ -335,7 +318,7 @@ def tf_gen_op_wrapper_cc(name,
   tf_cc_binary(
       name=tool,
       copts=tf_copts(),
-      linkopts=if_not_windows(["-lm"]),
+      linkopts=["-lm"],
       linkstatic=1,  # Faster to link this one-time-use binary dynamically
       deps=[op_gen] + deps)
 
@@ -506,7 +489,7 @@ def tf_gen_op_wrapper_py(name,
     deps = [str(Label("//tensorflow/core:" + name + "_op_lib"))]
   tf_cc_binary(
       name=tool_name,
-      linkopts=if_not_windows(["-lm"]) + cc_linkopts,
+      linkopts=["-lm"] + cc_linkopts,
       copts=tf_copts(),
       linkstatic=1,  # Faster to link this one-time-use binary dynamically
       deps=([
@@ -599,15 +582,7 @@ def tf_cc_test(name,
       name="%s%s" % (name, suffix),
       srcs=srcs + tf_binary_additional_srcs(),
       copts=tf_copts() + extra_copts,
-      linkopts=select({
-        "//tensorflow:android": [
-            "-pie",
-          ],
-        "//conditions:default": [
-            "-lpthread",
-            "-lm"
-        ],
-      }) + linkopts + _rpath_linkopts(name),
+      linkopts=["-lpthread", "-lm"] + linkopts + _rpath_linkopts(name),
       deps=deps + if_mkl(
           [
               "//third_party/mkl:intel_binary_blob",
@@ -721,7 +696,7 @@ def tf_cuda_only_cc_test(name,
       deps=deps + if_cuda([
           clean_dep("//tensorflow/core:cuda"),
           clean_dep("//tensorflow/core:gpu_lib")]),
-      linkopts=if_not_windows(["-lpthread", "-lm"]) + linkopts + _rpath_linkopts(name),
+      linkopts=["-lpthread", "-lm"] + linkopts + _rpath_linkopts(name),
       linkstatic=linkstatic or select({
           # cc_tests with ".so"s in srcs incorrectly link on Darwin
           # unless linkstatic=1.
@@ -859,7 +834,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_library(deps=None, cuda_deps=None, copts=tf_copts(), **kwargs):
+def tf_cuda_library(deps=None, cuda_deps=None, copts=None, **kwargs):
   """Generate a cc_library with a conditional set of CUDA dependencies.
 
   When the library is built with --config=cuda:
@@ -879,6 +854,8 @@ def tf_cuda_library(deps=None, cuda_deps=None, copts=tf_copts(), **kwargs):
     deps = []
   if not cuda_deps:
     cuda_deps = []
+  if not copts:
+    copts = []
 
   native.cc_library(
       deps=deps + if_cuda(cuda_deps + [
@@ -900,8 +877,7 @@ def tf_kernel_library(name,
                       hdrs=None,
                       deps=None,
                       alwayslink=1,
-                      copts=None,
-                      is_external=False,
+                      copts=tf_copts(),
                       **kwargs):
   """A rule to build a TensorFlow OpKernel.
 
@@ -930,8 +906,7 @@ def tf_kernel_library(name,
     hdrs = []
   if not deps:
     deps = []
-  if not copts:
-    copts = tf_copts(is_external=is_external)
+
   if prefix:
     if native.glob([prefix + "*.cu.cc"], exclude=["*test*"]):
       if not gpu_srcs:
@@ -1243,7 +1218,7 @@ def tf_custom_op_library(name, srcs=[], gpu_srcs=[], deps=[], linkopts=[]):
       srcs=srcs,
       deps=deps + if_cuda(cuda_deps),
       data=[name + "_check_deps"],
-      copts=tf_copts(is_external=True),
+      copts=tf_copts(),
       linkopts=linkopts + select({
           "//conditions:default": [
               "-lm",
@@ -1364,7 +1339,7 @@ def tf_py_wrap_cc(name,
 # 1. When --define=no_tensorflow_py_deps=true, the py_test depends on a marker
 #    file of the pip package, the test gets to rerun when the pip package change.
 #    Note that this only works on Windows. See the definition of
-#    //third_party/tensorflow/tools/pip_package:win_pip_package_marker for specific reasons.
+#    //tensorflow/tools/pip_package:win_pip_package_marker for specific reasons.
 # 2. When --define=no_tensorflow_py_deps=false (by default), it's a normal py_test.
 def py_test(deps=[], data=[], **kwargs):
   native.py_test(
@@ -1565,9 +1540,9 @@ def tf_version_info_genrule():
   native.genrule(
       name="version_info_gen",
       srcs=[
-          clean_dep("@local_config_git//:gen/spec.json"),
-          clean_dep("@local_config_git//:gen/head"),
-          clean_dep("@local_config_git//:gen/branch_ref"),
+          clean_dep("//tensorflow/tools/git:gen/spec.json"),
+          clean_dep("//tensorflow/tools/git:gen/head"),
+          clean_dep("//tensorflow/tools/git:gen/branch_ref"),
       ],
       outs=["util/version_info.cc"],
       cmd=
@@ -1587,10 +1562,9 @@ def tf_py_build_info_genrule():
 def cc_library_with_android_deps(deps,
                                  android_deps=[],
                                  common_deps=[],
-                                 copts=tf_copts(),
                                  **kwargs):
   deps = if_not_android(deps) + if_android(android_deps) + common_deps
-  native.cc_library(deps=deps, copts=copts, **kwargs)
+  native.cc_library(deps=deps, **kwargs)
 
 register_extension_info(
     extension_name = "cc_library_with_android_deps",

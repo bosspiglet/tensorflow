@@ -83,11 +83,6 @@ XlaOpRegistry::~XlaOpRegistry() = default;
       return false;
     }
   }
-  if (x.compile_time_constant_inputs != y.compile_time_constant_inputs) {
-    LOG(WARNING) << "Registrations of " << x.name
-                 << " have incompatible compile time constant inputs.";
-    return false;
-  }
   return true;
 }
 
@@ -268,17 +263,6 @@ std::vector<const KernelDef*> XlaOpRegistry::DeviceKernels(
   return kernels;
 }
 
-/* static */ const std::unordered_set<string>*
-XlaOpRegistry::CompileTimeConstantInputs(const string& op) {
-  XlaOpRegistry& registry = Instance();
-  mutex_lock lock(registry.mutex_);
-  auto it = registry.ops_.find(op);
-  if (it == registry.ops_.end()) {
-    return nullptr;
-  }
-  return &it->second->compile_time_constant_inputs;
-}
-
 std::vector<string> XlaOpRegistry::BackendNames() {
   std::vector<string> names;
   XlaOpRegistry& registry = Instance();
@@ -350,12 +334,6 @@ XlaOpRegistrationBuilder& XlaOpRegistrationBuilder::TypeConstraint(
   for (DataType t : allowed) {
     types.insert(t);
   }
-  return *this;
-}
-
-XlaOpRegistrationBuilder& XlaOpRegistrationBuilder::CompileTimeConstInput(
-    StringPiece input_name) {
-  registration_->compile_time_constant_inputs.insert(input_name.ToString());
   return *this;
 }
 

@@ -78,11 +78,10 @@ class DropStaleGradientOptimizer(optimizer.Optimizer):
   def apply_gradients(self, grads_and_vars, global_step=None, name=None):
     gradients = []
     # Number of stale gradients.
-    with ops.colocate_with(global_step):
-      stale_counter = variable_scope.get_variable(
-          "stale_counter", [],
-          initializer=init_ops.zeros_initializer(),
-          trainable=False)
+    stale_counter = variable_scope.get_variable(
+        "stale_counter", [],
+        initializer=init_ops.zeros_initializer(),
+        trainable=False)
 
     def _AcceptGradientOp():
       with ops.control_dependencies(

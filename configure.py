@@ -265,6 +265,19 @@ def reset_tf_configure_bazelrc():
     f.write('import %workspace%/.tf_configure.bazelrc\n')
 
 
+def run_gen_git_source(environ_cp):
+  """Run the gen_git_source to create links.
+
+  The links are for bazel to track dependencies for git hash propagation.
+
+  Args:
+    environ_cp: copy of the os.environ.
+  """
+  cmd = '"%s" tensorflow/tools/git/gen_git_source.py --configure %s' % (
+      environ_cp.get('PYTHON_BIN_PATH'), os.getcwd())
+  os.system(cmd)
+
+
 def cleanup_makefile():
   """Delete any leftover BUILD files from the Makefile build.
 
@@ -498,21 +511,6 @@ def set_tf_cuda_clang(environ_cp):
   set_action_env_var(
       environ_cp,
       'TF_CUDA_CLANG',
-      None,
-      False,
-      question=question,
-      yes_reply=yes_reply,
-      no_reply=no_reply)
-
-
-def set_tf_download_clang(environ_cp):
-  """Set TF_DOWNLOAD_CLANG action_env."""
-  question = 'Do you want to download a fresh release of clang? (Experimental)'
-  yes_reply = 'Clang will be downloaded and used to compile tensorflow.'
-  no_reply = 'Clang will not be downloaded.'
-  set_action_env_var(
-      environ_cp,
-      'TF_DOWNLOAD_CLANG',
       None,
       False,
       question=question,
@@ -808,7 +806,7 @@ def set_tf_cuda_version(environ_cp):
       'Please specify the CUDA SDK version you want to use, '
       'e.g. 7.0. [Leave empty to default to CUDA %s]: ') % _DEFAULT_CUDA_VERSION
 
-  for _ in range(_DEFAULT_PROMPT_ASK_ATTEMPTS):
+  while True:
     # Configure the Cuda SDK version to use.
     tf_cuda_version = get_from_env_or_user_or_default(
         environ_cp, 'TF_CUDA_VERSION', ask_cuda_version, _DEFAULT_CUDA_VERSION)
@@ -846,11 +844,6 @@ def set_tf_cuda_version(environ_cp):
     environ_cp['TF_CUDA_VERSION'] = ''
     environ_cp['CUDA_TOOLKIT_PATH'] = ''
 
-  else:
-    raise UserInputError('Invalid TF_CUDA_SETTING setting was provided %d '
-                         'times in a row. Assuming to be a scripting mistake.' %
-                         _DEFAULT_PROMPT_ASK_ATTEMPTS)
-
   # Set CUDA_TOOLKIT_PATH and TF_CUDA_VERSION
   environ_cp['CUDA_TOOLKIT_PATH'] = cuda_toolkit_path
   write_action_env_to_bazelrc('CUDA_TOOLKIT_PATH', cuda_toolkit_path)
@@ -864,7 +857,7 @@ def set_tf_cudnn_version(environ_cp):
       'Please specify the cuDNN version you want to use. '
       '[Leave empty to default to cuDNN %s.0]: ') % _DEFAULT_CUDNN_VERSION
 
-  for _ in range(_DEFAULT_PROMPT_ASK_ATTEMPTS):
+  while True:
     tf_cudnn_version = get_from_env_or_user_or_default(
         environ_cp, 'TF_CUDNN_VERSION', ask_cudnn_version,
         _DEFAULT_CUDNN_VERSION)
@@ -923,10 +916,6 @@ def set_tf_cudnn_version(environ_cp):
       print('%s.%s' % (cudnn_path_from_ldconfig, tf_cudnn_version))
 
     environ_cp['TF_CUDNN_VERSION'] = ''
-  else:
-    raise UserInputError('Invalid TF_CUDNN setting was provided %d '
-                         'times in a row. Assuming to be a scripting mistake.' %
-                         _DEFAULT_PROMPT_ASK_ATTEMPTS)
 
   # Set CUDNN_INSTALL_PATH and TF_CUDNN_VERSION
   environ_cp['CUDNN_INSTALL_PATH'] = cudnn_install_path
@@ -1120,6 +1109,44 @@ def set_trisycl_include_dir(environ_cp):
   write_action_env_to_bazelrc('TRISYCL_INCLUDE_DIR',
                               trisycl_include_dir)
 
+def set_trisycl_include_dir(environ_cp):
+  """Set TRISYCL_INCLUDE_DIR."""
+  ask_trisycl_include_dir = ('Please specify the location of the triSYCL '
+                             'include directory. (Use --config=sycl_trisycl '
+                             'when building with Bazel) '
+                             '[Default is %s]: ') % _DEFAULT_TRISYCL_INCLUDE_DIR
+  while True:
+    trisycl_include_dir = get_from_env_or_user_or_default(
+        environ_cp, 'TRISYCL_INCLUDE_DIR', ask_trisycl_include_dir,
+        _DEFAULT_TRISYCL_INCLUDE_DIR)
+    if os.path.exists(trisycl_include_dir):
+      break
+
+    print('Invalid triSYCL include directory, %s cannot be found'
+          % (trisycl_include_dir))
+
+  # Set TRISYCL_INCLUDE_DIR
+  environ_cp['TRISYCL_INCLUDE_DIR'] = trisycl_include_dir
+  write_action_env_to_bazelrc('TRISYCL_INCLUDE_DIR',
+                              trisycl_include_dir)
+
+
+def set_trisycl_include_dir(environ_cp):
+  """Set TRISYCL_INCLUDE_DIR."""
+
+  trisycl_include_dir = prompt_loop_or_load_from_env(
+      environ_cp,
+      var_name='TRISYCL_INCLUDE_DIR',
+      var_default=_DEFAULT_TRISYCL_INCLUDE_DIR,
+      ask_for_var=('Please specify the location of the triSYCL include '
+                   'directory. (Use --config=sycl_trisycl when building with '
+                   'Bazel)'),
+      check_success=os.path.exists,
+      error_msg='Invalid trySYCL include directory. %s cannot be found.',
+      suppress_default_error=True)
+
+  write_action_env_to_bazelrc('TRISYCL_INCLUDE_DIR', trisycl_include_dir)
+
 
 def set_mpi_home(environ_cp):
   """Set MPI_HOME."""
@@ -1238,6 +1265,7 @@ def main():
   reset_tf_configure_bazelrc()
   cleanup_makefile()
   setup_python(environ_cp)
+  run_gen_git_source(environ_cp)
 
   if is_windows():
     environ_cp['TF_NEED_S3'] = '0'
@@ -1286,19 +1314,8 @@ def main():
 
     set_tf_cuda_clang(environ_cp)
     if environ_cp.get('TF_CUDA_CLANG') == '1':
-      if not is_windows():
-        # Ask if we want to download clang release while building.
-        set_tf_download_clang(environ_cp)
-      else:
-        # We use bazel's generated crosstool on Windows and there is no
-        # way to provide downloaded toolchain for that yet.
-        # TODO(ibiryukov): Investigate using clang as a cuda compiler on
-        # Windows.
-        environ_cp['TF_DOWNLOAD_CLANG'] = '0'
-
-      if environ_cp.get('TF_DOWNLOAD_CLANG') != '1':
-        # Set up which clang we should use as the cuda / host compiler.
-        set_clang_cuda_compiler_path(environ_cp)
+      # Set up which clang we should use as the cuda / host compiler.
+      set_clang_cuda_compiler_path(environ_cp)
     else:
       # Set up which gcc nvcc should use as the host compiler
       # No need to set this on Windows

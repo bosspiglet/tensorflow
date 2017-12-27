@@ -30,23 +30,6 @@ limitations under the License.
 namespace tensorflow {
 namespace grappler {
 
-namespace {
-int64 NumEdges(const GraphDef& graph) {
-  int64 num_edges = 0;
-  for (const auto& node : graph.node()) {
-    num_edges += node.input_size();
-  }
-  return num_edges;
-}
-
-string PrintSizesBeforeAfter(const GraphDef& before, const GraphDef& after) {
-  return strings::StrCat("Graph size before: ", before.node_size(), " nodes, ",
-                         NumEdges(before),
-                         " edges. Graph size after: ", after.node_size(),
-                         " nodes, ", NumEdges(after), " edges.");
-}
-}  // namespace
-
 std::unique_ptr<GraphOptimizer> MetaOptimizer::NewOptimizer(
     const string& optimizer) {
   VLOG(1) << "Adding graph optimization pass: " << optimizer;
@@ -145,7 +128,10 @@ Status MetaOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
       } else {
         already_optimized = true;
         result = strings::StrCat(
-            "OK. ", PrintSizesBeforeAfter(item.graph, *optimized_graph));
+            "OK. "
+            "Graph size before: ",
+            item.graph.node_size(),
+            ". Graph size after: ", optimized_graph->node_size());
       }
       result_.push_back(std::make_pair(optimizer->name(), result));
       VLOG(1) << "Optimizer " << optimizer->name()
@@ -162,8 +148,10 @@ Status MetaOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
         result = status.ToString();
       } else {
         result = strings::StrCat(
-            "OK. ",
-            PrintSizesBeforeAfter(optimized_item.graph, *optimized_graph));
+            "OK. "
+            "Graph size before: ",
+            optimized_item.graph.node_size(),
+            ". Graph size after: ", optimized_graph->node_size());
       }
       result_.push_back(std::make_pair(optimizer->name(), result));
       VLOG(1) << "Optimizer " << optimizer->name()

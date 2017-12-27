@@ -445,26 +445,21 @@ class Conv2DBackpropInputOp : public ConvBackpropInputOp {
   explicit Conv2DBackpropInputOp(OpKernelConstruction* ctx)
       : ConvBackpropInputOp(ctx, /*num_spatial_dims=*/2, /*depthwise=*/false) {}
 };
-REGISTER_XLA_OP(
-    Name("Conv2DBackpropInput").CompileTimeConstInput("input_sizes"),
-    Conv2DBackpropInputOp);
+REGISTER_XLA_OP(Name("Conv2DBackpropInput"), Conv2DBackpropInputOp);
 
 class Conv3DBackpropInputOp : public ConvBackpropInputOp {
  public:
   explicit Conv3DBackpropInputOp(OpKernelConstruction* ctx)
       : ConvBackpropInputOp(ctx, /*num_spatial_dims=*/3, /*depthwise=*/false) {}
 };
-REGISTER_XLA_OP(
-    Name("Conv3DBackpropInputV2").CompileTimeConstInput("input_sizes"),
-    Conv3DBackpropInputOp);
+REGISTER_XLA_OP(Name("Conv3DBackpropInputV2"), Conv3DBackpropInputOp);
 
 class DepthwiseConv2DBackpropInputOp : public ConvBackpropInputOp {
  public:
   explicit DepthwiseConv2DBackpropInputOp(OpKernelConstruction* ctx)
       : ConvBackpropInputOp(ctx, /*num_spatial_dims=*/2, /*depthwise=*/true) {}
 };
-REGISTER_XLA_OP(Name("DepthwiseConv2dNativeBackpropInput")
-                    .CompileTimeConstInput("input_sizes"),
+REGISTER_XLA_OP(Name("DepthwiseConv2dNativeBackpropInput"),
                 DepthwiseConv2DBackpropInputOp);
 
 class ConvBackpropFilterOp : public XlaOpKernel {
@@ -649,9 +644,7 @@ class Conv2DBackpropFilterOp : public ConvBackpropFilterOp {
       : ConvBackpropFilterOp(ctx, /*num_spatial_dims=*/2, /*depthwise=*/false) {
   }
 };
-REGISTER_XLA_OP(
-    Name("Conv2DBackpropFilter").CompileTimeConstInput("filter_sizes"),
-    Conv2DBackpropFilterOp);
+REGISTER_XLA_OP(Name("Conv2DBackpropFilter"), Conv2DBackpropFilterOp);
 
 class Conv3DBackpropFilterOp : public ConvBackpropFilterOp {
  public:
@@ -659,17 +652,14 @@ class Conv3DBackpropFilterOp : public ConvBackpropFilterOp {
       : ConvBackpropFilterOp(ctx, /*num_spatial_dims=*/3, /*depthwise=*/false) {
   }
 };
-REGISTER_XLA_OP(
-    Name("Conv3DBackpropFilterV2").CompileTimeConstInput("filter_sizes"),
-    Conv3DBackpropFilterOp);
+REGISTER_XLA_OP(Name("Conv3DBackpropFilterV2"), Conv3DBackpropFilterOp);
 
 class DepthwiseConv2DBackpropFilterOp : public ConvBackpropFilterOp {
  public:
   explicit DepthwiseConv2DBackpropFilterOp(OpKernelConstruction* ctx)
       : ConvBackpropFilterOp(ctx, /*num_spatial_dims=*/2, /*depthwise=*/true) {}
 };
-REGISTER_XLA_OP(Name("DepthwiseConv2dNativeBackpropFilter")
-                    .CompileTimeConstInput("filter_sizes"),
+REGISTER_XLA_OP(Name("DepthwiseConv2dNativeBackpropFilter"),
                 DepthwiseConv2DBackpropFilterOp);
 
 }  // namespace

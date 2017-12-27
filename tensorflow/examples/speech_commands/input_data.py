@@ -153,12 +153,19 @@ class AudioProcessor(object):
 
   def __init__(self, data_url, data_dir, silence_percentage, unknown_percentage,
                wanted_words, validation_percentage, testing_percentage,
-               model_settings):
+               model_settings, infer_data_dir=None):
     self.data_dir = data_dir
+    self.infer_data_dir = infer_data_dir
     self.maybe_download_and_extract_dataset(data_url, data_dir)
     self.prepare_data_index(silence_percentage, unknown_percentage,
                             wanted_words, validation_percentage,
                             testing_percentage)
+
+    tf.logging.info('words_list %s', self.words_list) 
+    tf.logging.info('word_to_index %s', self.word_to_index) 
+
+    if infer_data_dir != None:
+      self.prepare_infer_data_index()
     self.prepare_background_data()
     self.prepare_processing_graph(model_settings)
 
@@ -289,6 +296,14 @@ class AudioProcessor(object):
         self.word_to_index[word] = UNKNOWN_WORD_INDEX
     self.word_to_index[SILENCE_LABEL] = SILENCE_INDEX
 
+  def prepare_infer_data_index(self):
+    """Prepares a list of the samples organized by set and label.
+    """
+    self.infer_data_index = []
+    search_path = os.path.join(self.infer_data_dir, '*', '*.wav')
+    for wav_path in gfile.Glob(search_path):
+      self.infer_data_index.append({'file': wav_path})
+
   def prepare_background_data(self):
     """Searches a folder for background noise audio, and loads it into memory.
 
@@ -328,8 +343,13 @@ class AudioProcessor(object):
   def prepare_processing_graph(self, model_settings):
     """Builds a TensorFlow graph to apply the input distortions.
 
-    Creates a graph that loads a WAVE file, decodes it, scales the volume,
-    shifts it in time, adds in background noise, calculates a spectrogram, and
+    Creates a graph that loads a WAVE file, decodes it, 
+    
+    scales the volume,
+    shifts it in time, 
+    adds in background noise,
+    
+    calculates a spectrogram, and
     then builds an MFCC fingerprint from that.
 
     This must be called with an active TensorFlow session running, and it
@@ -485,28 +505,74 @@ class AudioProcessor(object):
       labels[i - offset] = label_index
     return data, labels
 
-  def get_unprocessed_data(self, how_many, model_settings, mode):
-    """Retrieve sample data for the given partition, with no transformations.
+  def get_infer_data(self, how_many, offset, model_settings, sess):
+    """Gather samples from the data set, applying transformations as needed.
+
+    When the mode is 'training', a random selection of samples will be returned,
+    otherwise the first N clips in the partition will be used. This ensures that
+    validation always uses the same samples, reducing noise in the metrics.
 
     Args:
       how_many: Desired number of samples to return. -1 means the entire
         contents of this partition.
+      offset: Where to start when fetching deterministically.
       model_settings: Information about the current model being trained.
-      mode: Which partition to use, must be 'training', 'validation', or
-        'testing'.
+      sess: TensorFlow session that was active when processor was created.
+
+    Returns:
+      List of sample data for the transformed samples, and list of label indexes
+    """
+    # Pick one of the partitions to choose samples from.
+    candidates = self.infer_data_index
+    if how_many == -1:
+      sample_count = len(candidates)
+    else:
+      sample_count = max(0, min(how_many, len(candidates) - offset))
+    # Data and labels will be populated and returned.
+    data = np.zeros((sample_count, model_settings['fingerprint_size']))
+    file_paths = {}
+    desired_samples = model_settings['desired_samples']
+
+    # Use the processing graph we created earlier to repeatedly to generate the
+    # final output sample data we'll use in training.
+    for i in xrange(offset, offset + sample_count):
+      # Pick which audio sample to use.
+      sample_index = i
+      sample = candidates[sample_index]
+      
+      # If we're time shifting, set up the offset for this sample.        
+      time_shift_amount = 0
+      time_shift_padding = [[0, -time_shift_amount], [0, 0]]
+      time_shift_offset = [-time_shift_amount, 0]
+
+      input_dict = {
+          self.wav_filename_placeholder_: sample['file'],
+          self.time_shift_padding_placeholder_: time_shift_padding,
+          self.time_shift_offset_placeholder_: time_shift_offset,
+      }
+
+      input_dict[self.background_data_placeholder_] = np.zeros([desired_samples, 1])
+      input_dict[self.background_volume_placeholder_] = 0
+      input_dict[self.foreground_volume_placeholder_] = 1
+      # Run the graph to produce the output audio.
+      data[i - offset, :] = sess.run(self.mfcc_, feed_dict=input_dict).flatten()
+      file_path = sample['file'].split('\\')[-1]
+      file_paths[i - offset] = file_path      
+    return data, file_paths
+
+  def get_infer_data1(self, model_settings):
+    """Retrieve sample data for the given partition, with no transformations.
+
+    Args:
+      model_settings: Information about the current model being trained.
 
     Returns:
       List of sample data for the samples, and list of labels in one-hot form.
     """
-    candidates = self.data_index[mode]
-    if how_many == -1:
-      sample_count = len(candidates)
-    else:
-      sample_count = how_many
+    candidates = self.infer_data_index
+    sample_count = len(candidates)
     desired_samples = model_settings['desired_samples']
-    words_list = self.words_list
     data = np.zeros((sample_count, desired_samples))
-    labels = []
     with tf.Session(graph=tf.Graph()) as sess:
       wav_filename_placeholder = tf.placeholder(tf.string, [])
       wav_loader = io_ops.read_file(wav_filename_placeholder)
@@ -516,17 +582,9 @@ class AudioProcessor(object):
       scaled_foreground = tf.multiply(wav_decoder.audio,
                                       foreground_volume_placeholder)
       for i in range(sample_count):
-        if how_many == -1:
-          sample_index = i
-        else:
-          sample_index = np.random.randint(len(candidates))
+        sample_index = i
         sample = candidates[sample_index]
         input_dict = {wav_filename_placeholder: sample['file']}
-        if sample['label'] == SILENCE_LABEL:
-          input_dict[foreground_volume_placeholder] = 0
-        else:
-          input_dict[foreground_volume_placeholder] = 1
+        input_dict[foreground_volume_placeholder] = 1
         data[i, :] = sess.run(scaled_foreground, feed_dict=input_dict).flatten()
-        label_index = self.word_to_index[sample['label']]
-        labels.append(words_list[label_index])
-    return data, labels
+    return data

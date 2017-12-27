@@ -40,7 +40,7 @@ limitations under the License.
 %}
 
 %{
-string GenerateModelReport(const tensorflow::MetaGraphDef& metagraph, bool debug) {
+string GenerateModelReport(const tensorflow::MetaGraphDef& metagraph) {
   tensorflow::grappler::ItemConfig cfg;
   cfg.apply_optimizations = false;
   std::unique_ptr<tensorflow::grappler::GrapplerItem> item =
@@ -53,10 +53,10 @@ string GenerateModelReport(const tensorflow::MetaGraphDef& metagraph, bool debug
   tensorflow::grappler::ModelAnalyzer analyzer(*item);
 
   std::stringstream os;
-  analyzer.GenerateReport(debug, os);
+  analyzer.GenerateReport(os);
   return os.str();
 }
 
 %}
 
-string GenerateModelReport(const tensorflow::MetaGraphDef& metagraph, bool debug);
+string GenerateModelReport(const tensorflow::MetaGraphDef& metagraph);

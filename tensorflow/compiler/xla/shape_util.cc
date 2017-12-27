@@ -65,36 +65,30 @@ namespace {
 // the shapes are the same. If compare_layouts is true, then layouts must also
 // match.
 bool CompareShapes(const Shape& lhs, const Shape& rhs, bool compare_layouts) {
-  if (ShapeUtil::IsTuple(lhs) || ShapeUtil::IsTuple(rhs)) {
-    return ShapeUtil::IsTuple(lhs) && ShapeUtil::IsTuple(rhs) &&
+  if (ShapeUtil::IsTuple(lhs)) {
+    return ShapeUtil::IsTuple(rhs) &&
            ContainersEqual(lhs.tuple_shapes(), rhs.tuple_shapes(),
                            [=](const Shape& l, const Shape& r) {
                              return CompareShapes(l, r, compare_layouts);
                            });
-  } else if (ShapeUtil::IsOpaque(lhs) || ShapeUtil::IsOpaque(rhs)) {
-    return ShapeUtil::IsOpaque(lhs) && ShapeUtil::IsOpaque(rhs);
   }
-
+  // Explicitly compare the fields rather than using MessageDifferencer because
+  // we want empty layouts to be treated identically to missing layouts.
   if (compare_layouts) {
-    if (lhs.layout().format() != rhs.layout().format()) {
+    if (!ContainersEqual(lhs.layout().minor_to_major(),
+                         rhs.layout().minor_to_major())) {
+      VLOG(3) << "CompareShapes: lhs layout != rhs layout";
       return false;
     }
-    if (LayoutUtil::IsDense(lhs)) {
-      if (!ContainersEqual(LayoutUtil::MinorToMajor(lhs),
-                           LayoutUtil::MinorToMajor(rhs))) {
-        VLOG(3) << "CompareShapes: lhs layout != rhs layout";
-        return false;
-      }
-      if (!ContainersEqual(lhs.layout().padded_dimensions(),
-                           rhs.layout().padded_dimensions())) {
-        VLOG(3)
-            << "CompareShapes: lhs padded_dimensions != rhs padded_dimensions";
-        return false;
-      }
-      if (lhs.layout().padding_value() != rhs.layout().padding_value()) {
-        VLOG(3) << "CompareShapes: lhs padding value != rhs padding_value";
-        return false;
-      }
+    if (!ContainersEqual(lhs.layout().padded_dimensions(),
+                         rhs.layout().padded_dimensions())) {
+      VLOG(3)
+          << "CompareShapes: lhs padded_dimensions != rhs padded_dimensions";
+      return false;
+    }
+    if (lhs.layout().padding_value() != rhs.layout().padding_value()) {
+      VLOG(3) << "CompareShapes: lhs padding value != rhs padding_value";
+      return false;
     }
   }
 
@@ -189,21 +183,20 @@ StatusOr<Shape> MakeShapeWithLayoutInternal(
       .ValueOrDie();
 }
 
-/* static */ Shape ShapeUtil::MakeShapeWithDescendingLayout(
+/* static */ Shape ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
     PrimitiveType element_type, tensorflow::gtl::ArraySlice<int64> dimensions) {
   std::vector<int64> layout(dimensions.size());
   std::iota(layout.rbegin(), layout.rend(), static_cast<int64>(0));
   return MakeShapeWithLayout(element_type, dimensions, layout);
 }
 
-/* static */ Shape
-ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
+/* static */ Shape ShapeUtil::NormalizeShapeToMonotonicDim0MajorLayout(
     const Shape& shape) {
   std::vector<int64> dims(shape.dimensions_size());
   for (int i = 0; i < shape.dimensions_size(); ++i) {
     dims[i] = shape.dimensions(LayoutUtil::Major(shape.layout(), i));
   }
-  return MakeShapeWithDescendingLayout(shape.element_type(), dims);
+  return MakeShapeWithMonotonicDim0MajorLayout(shape.element_type(), dims);
 }
 
 /* static */ void ShapeUtil::PopulateShape(
@@ -243,7 +236,6 @@ ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(
 }
 
 /* static */ void ShapeUtil::AppendMajorDimension(int bound, Shape* shape) {
-  CHECK(LayoutUtil::IsDense(*shape));
   shape->mutable_layout()->add_minor_to_major(Rank(*shape));
   shape->add_dimensions(bound);
   TF_DCHECK_OK(ValidateShape(*shape));
@@ -893,9 +885,7 @@ Status ForEachMutableSubshapeHelper(
     new_shape.add_dimensions(dim);
   }
   if (shape.has_layout()) {
-    CHECK(LayoutUtil::IsDense(shape));
     Layout* new_layout = new_shape.mutable_layout();
-    new_layout->set_format(DENSE);
     new_layout->clear_minor_to_major();
     for (auto index : Permute(permutation, shape.layout().minor_to_major())) {
       new_layout->add_minor_to_major(index);
@@ -1149,9 +1139,9 @@ ShapeUtil::DimensionsUnmodifiedByReshape(const Shape& input_shape,
     // as input_shape/output_shape and the dimension-0-major layout. These two
     // shapes are used for conversion between logical linear indices and
     // multi-dimensional indices.
-    Shape input_shape_dim0_major = MakeShapeWithDescendingLayout(
+    Shape input_shape_dim0_major = MakeShapeWithMonotonicDim0MajorLayout(
         input_shape.element_type(), AsInt64Slice(input_shape.dimensions()));
-    Shape output_shape_dim0_major = MakeShapeWithDescendingLayout(
+    Shape output_shape_dim0_major = MakeShapeWithMonotonicDim0MajorLayout(
         output_shape.element_type(), AsInt64Slice(output_shape.dimensions()));
 
     for (int64 input_dim = 0; input_dim < Rank(input_shape); ++input_dim) {
@@ -1322,7 +1312,6 @@ ShapeUtil::DimensionsUnmodifiedByReshape(const Shape& input_shape,
   shape.mutable_dimensions()->erase(shape.dimensions().begin() + dim_to_delete);
   if (LayoutUtil::HasLayout(shape)) {
     Layout* layout = shape.mutable_layout();
-    layout->set_format(DENSE);
     for (size_t i = 0; i < layout->minor_to_major().size();) {
       if (layout->minor_to_major(i) == dim_to_delete) {
         layout->mutable_minor_to_major()->erase(

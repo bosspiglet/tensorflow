@@ -47,7 +47,6 @@ _allowed_symbols = [
     'dnn_logit_fn_builder',
     'linear_logit_fn_builder',
     'replicate_model_fn',
-    'GatheringOptimizer',
 ]
 
 remove_undocumented(__name__, allowed_exception_list=_allowed_symbols)

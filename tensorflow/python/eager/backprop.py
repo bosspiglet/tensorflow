@@ -353,10 +353,7 @@ def implicit_val_and_grad(f):
                              f.__name__))
     finally:
       popped_tape = tape.pop_tape()
-    # Sorting variables by id, which is monotonically increasing in construction
-    # order. This ensures unique order across executions.
-    variables = list(sorted(popped_tape.watched_variables(),
-                            key=lambda v: v.handle._id))  # pylint: disable=protected-access
+      variables = popped_tape.watched_variables()
     sources = [x.handle for x in variables]
 
     if not sources:

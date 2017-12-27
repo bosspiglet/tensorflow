@@ -7,7 +7,9 @@ package(default_visibility = ["//tensorflow:internal"])
 licenses(["notice"])  # Apache 2.0
 
 exports_files(
-    ["gen_git_source.py"],
+    glob(["gen/*"]) + [
+        "gen_git_source.py",
+    ],
 )
 
 # -----------------------------------------------------------------------------

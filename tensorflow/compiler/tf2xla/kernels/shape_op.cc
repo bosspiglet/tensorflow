@@ -150,7 +150,7 @@ class ExpandDimsOp : public XlaOpKernel {
     ctx->SetOutput(0, ctx->builder()->Reshape(ctx->Input(0), new_shape));
   }
 };
-REGISTER_XLA_OP(Name("ExpandDims").CompileTimeConstInput("dim"), ExpandDimsOp);
+REGISTER_XLA_OP(Name("ExpandDims"), ExpandDimsOp);
 
 class SqueezeOp : public XlaOpKernel {
  public:

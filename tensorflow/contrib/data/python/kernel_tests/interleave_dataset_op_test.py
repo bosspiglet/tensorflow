@@ -41,7 +41,6 @@ from tensorflow.python.platform import test
 class InterleaveDatasetTest(test.TestCase):
 
   def _interleave(self, lists, cycle_length, block_length):
-    # TODO(b/69678297): Consolidate python interleave implementations.
     num_open = 0
 
     # `all_iterators` acts as a queue of iterators over each element of `lists`.
@@ -256,15 +255,11 @@ class InterleaveDatasetSeriazationTest(
 class ParallelInterleaveDatasetTest(test.TestCase):
 
   def setUp(self):
-
     self.input_values = array_ops.placeholder(dtypes.int64, shape=[None])
     self.cycle_length = array_ops.placeholder(dtypes.int64, shape=[])
     self.block_length = array_ops.placeholder(dtypes.int64, shape=[])
     self.sloppy = array_ops.placeholder(dtypes.bool, shape=[])
-    self.buffer_output_elements = array_ops.placeholder(dtypes.int64, shape=[])
-    self.prefetch_input_elements = array_ops.placeholder(dtypes.int64, shape=[])
 
-    self.error = None
     self.repeat_count = 2
 
     # Set up threading events used to sequence when items are produced that
@@ -281,10 +276,6 @@ class ParallelInterleaveDatasetTest(test.TestCase):
       self.write_coordination_events[x].wait()
       self.write_coordination_events[x].clear()
       self.read_coordination_events[x].release()
-      if self.error:
-        err = self.error
-        self.error = None
-        raise err  # pylint: disable=raising-bad-type
       return x * x
 
     def map_fn(x):
@@ -295,13 +286,11 @@ class ParallelInterleaveDatasetTest(test.TestCase):
       dataset = dataset.repeat(x)
       return dataset.map(map_fn)
 
-    self.dataset = (
-        dataset_ops.Dataset.from_tensor_slices(self.input_values)
-        .repeat(self.repeat_count).apply(
-            interleave_ops.parallel_interleave(interleave_fn, self.cycle_length,
-                                               self.block_length, self.sloppy,
-                                               self.buffer_output_elements,
-                                               self.prefetch_input_elements)))
+    self.dataset = (dataset_ops.Dataset.from_tensor_slices(self.input_values)
+                    .repeat(self.repeat_count).apply(
+                        interleave_ops.parallel_interleave(
+                            interleave_fn, self.cycle_length,
+                            self.block_length, self.sloppy)))
     self.iterator = self.dataset.make_initializable_iterator()
     self.init_op = self.iterator.initializer
     self.next_element = self.iterator.get_next()
@@ -391,7 +380,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
     for i in range(4, 7):
       self.write_coordination_events[i].set()
 
-  def _testSingleThreaded(self, sloppy=False, prefetch_input_elements=0):
+  def _testSingleThreaded(self, sloppy=False):
     # cycle_length=1,block_length=1 acts like `Dataset.interleave()` and
     # `Dataset.flat_map()` and is single-threaded. No synchronization required.
     with self.test_session() as sess:
@@ -402,9 +391,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [4, 5, 6],
               self.cycle_length: 1,
               self.block_length: 1,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: prefetch_input_elements,
+              self.sloppy: sloppy
           })
 
       for expected_element in self._interleave(
@@ -421,41 +408,6 @@ class ParallelInterleaveDatasetTest(test.TestCase):
   def testSingleThreadedSloppy(self):
     self._testSingleThreaded(sloppy=True)
 
-  def testSingleThreadedPrefetch1Itr(self):
-    self._testSingleThreaded(prefetch_input_elements=1)
-
-  def testSingleThreadedPrefetch1ItrSloppy(self):
-    self._testSingleThreaded(prefetch_input_elements=1, sloppy=True)
-
-  def testSingleThreadedRagged(self):
-    # Tests a sequence with wildly different elements per iterator.
-    with self.test_session() as sess:
-      self._clear_coordination_events()
-      sess.run(
-          self.init_op,
-          feed_dict={
-              self.input_values: [3, 7, 4],
-              self.cycle_length: 2,
-              self.block_length: 1,
-              self.sloppy: False,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
-          })
-
-      # Add coordination values for 3 and 7
-      self.read_coordination_events[3] = threading.Semaphore(0)
-      self.write_coordination_events[3] = threading.Event()
-      self.read_coordination_events[7] = threading.Semaphore(0)
-      self.write_coordination_events[7] = threading.Event()
-
-      for expected_element in self._interleave(
-          [[3] * 3, [7] * 7, [4] * 4] * self.repeat_count, 2, 1):
-        self.write_coordination_events[expected_element].set()
-        output = sess.run(self.next_element)
-        self.assertEqual(expected_element * expected_element, output)
-      with self.assertRaises(errors.OutOfRangeError):
-        sess.run(self.next_element)
-
   def _testTwoThreadsNoContention(self, sloppy=False):
     # num_threads > 1.
     # Explicit coordination should result in `Dataset.interleave()` behavior
@@ -468,9 +420,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [4, 5, 6],
               self.cycle_length: 2,
               self.block_length: 1,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
+              self.sloppy: sloppy
           })
       for i, expected_element in enumerate(
           self._interleave([[4] * 4, [5] * 5, [6] * 6] * self.repeat_count, 2,
@@ -513,8 +463,6 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.cycle_length: 2,
               self.block_length: 1,
               self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
           })
       for i, expected_element in enumerate(
           self._interleave([[4] * 4, [5] * 5, [6] * 6] * self.repeat_count, 2,
@@ -554,9 +502,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [4, 5, 6],
               self.cycle_length: 2,
               self.block_length: 2,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
+              self.sloppy: sloppy
           })
       for i, expected_element in enumerate(
           self._interleave([[4] * 4, [5] * 5, [6] * 6] * self.repeat_count, 2,
@@ -599,9 +545,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [4, 5, 6],
               self.cycle_length: 2,
               self.block_length: 2,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
+              self.sloppy: sloppy
           })
       for i, expected_element in enumerate(
           self._interleave([[4] * 4, [5] * 5, [6] * 6] * self.repeat_count, 2,
@@ -639,9 +583,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [],
               self.cycle_length: 2,
               self.block_length: 3,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
+              self.sloppy: sloppy
           })
       with self.assertRaises(errors.OutOfRangeError):
         sess.run(self.next_element)
@@ -662,9 +604,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [0, 0, 0],
               self.cycle_length: 2,
               self.block_length: 3,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
+              self.sloppy: sloppy
           })
       with self.assertRaises(errors.OutOfRangeError):
         sess.run(self.next_element)
@@ -675,8 +615,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
   def testNonEmptyInputIntoEmptyOutputsSloppy(self):
     self._testNonEmptyInputIntoEmptyOutputs(sloppy=True)
 
-  def _testPartiallyEmptyOutputs(self, sloppy=False, prefetch_input_elements=1):
-    race_indices = {2, 8, 14}  # Sequence points when sloppy mode has race conds
+  def _testPartiallyEmptyOutputs(self, sloppy=False):
     # Mixture of non-empty and empty interleaved datasets.
     with self.test_session() as sess:
       self._clear_coordination_events()
@@ -688,31 +627,27 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.cycle_length: 2,
               self.block_length: 1,
               self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: prefetch_input_elements,
           })
       for i, expected_element in enumerate(
           self._interleave([[4] * 4, [], [6] * 6] * self.repeat_count, 2, 1)):
         self.write_coordination_events[expected_element].set()
-        # First event starts the worker threads. Additionally, when running the
-        # sloppy case with prefetch_input_elements=0, we get stuck if we wait
-        # for the read coordination event for certain event orderings in the
-        # presence of finishing iterators.
-        if done_first_event and not (sloppy and (i in race_indices)):
+        if done_first_event:  # First event starts the worker threads
           self.read_coordination_events[expected_element].acquire()
         actual_element = sess.run(self.next_element)
-        if not done_first_event or (sloppy and (i in race_indices)):
+        if not done_first_event:
           done_first_event = True
           self.read_coordination_events[expected_element].acquire()
         self.assertEqual(expected_element * expected_element, actual_element,
                          "At index %s: %s expected, got: %s" %
                          (i, expected_element, actual_element))
+      with self.assertRaises(errors.OutOfRangeError):
+        sess.run(self.next_element)
 
   def testPartiallyEmptyOutputs(self):
     self._testPartiallyEmptyOutputs()
 
   def testPartiallyEmptyOutputsSloppy(self):
-    self._testPartiallyEmptyOutputs(sloppy=True, prefetch_input_elements=0)
+    self._testPartiallyEmptyOutputs(sloppy=True)
 
   def testDelayedOutputSloppy(self):
     # Explicitly control the sequence of events to ensure we correctly avoid
@@ -726,8 +661,6 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.cycle_length: 2,
               self.block_length: 1,
               self.sloppy: True,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
           })
 
       mis_ordering = [
@@ -750,10 +683,8 @@ class ParallelInterleaveDatasetTest(test.TestCase):
           feed_dict={
               self.input_values: [4, 5, 6],
               self.cycle_length: 2,
-              self.block_length: 1,
-              self.sloppy: True,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 1,
+              self.block_length: 3,
+              self.sloppy: True
           })
       # Test against a generating sequence that differs from the uncontended
       # case, in order to prove sloppy correctness.
@@ -761,7 +692,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
           self._interleave(
               [[4] * 4, [5] * 5, [6] * 6] * self.repeat_count,
               cycle_length=2,
-              block_length=3)):
+              block_length=2)):
         self.write_coordination_events[expected_element].set()
         if done_first_event:  # First event starts the worker threads.
           self.read_coordination_events[expected_element].acquire()
@@ -785,9 +716,7 @@ class ParallelInterleaveDatasetTest(test.TestCase):
               self.input_values: [4, 5, 6],
               self.cycle_length: 3,
               self.block_length: 2,
-              self.sloppy: sloppy,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
+              self.sloppy: sloppy
           })
       for i in range(4, 7):
         self.write_coordination_events[i].set()
@@ -860,139 +789,6 @@ class ParallelInterleaveDatasetTest(test.TestCase):
           self.assertAllEqual(expected, sess.run(get_next))
       with self.assertRaises(errors.OutOfRangeError):
         sess.run(get_next)
-
-  def testErrorsInOutputFn(self):
-    with self.test_session() as sess:
-      self._clear_coordination_events()
-      sess.run(
-          self.init_op,
-          feed_dict={
-              self.input_values: [4, 5, 6],
-              self.cycle_length: 2,
-              self.block_length: 1,
-              self.sloppy: False,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
-          })
-
-      except_on_element_indices = set([3])
-
-      for i, expected_element in enumerate(
-          self._interleave([[4] * 4, [5] * 5, [6] * 6] * self.repeat_count, 2,
-                           1)):
-        if i in except_on_element_indices:
-          self.error = ValueError()
-          self.write_coordination_events[expected_element].set()
-          with self.assertRaises(errors.InvalidArgumentError):
-            sess.run(self.next_element)
-        else:
-          self.write_coordination_events[expected_element].set()
-          actual_element = sess.run(self.next_element)
-          self.assertEqual(expected_element * expected_element, actual_element,
-                           "At index %s: %s expected, got: %s" %
-                           (i, expected_element, actual_element))
-      with self.assertRaises(errors.OutOfRangeError):
-        sess.run(self.next_element)
-
-  def testErrorsInInputFn(self):
-
-    def map_py_fn(x):
-      if x == 5:
-        raise ValueError()
-      return x
-
-    def map_fn(x):
-      return script_ops.py_func(map_py_fn, [x], x.dtype)
-
-    def interleave_fn(x):
-      dataset = dataset_ops.Dataset.from_tensors(x)
-      dataset = dataset.repeat(x)
-      return dataset
-
-    self.dataset = (
-        dataset_ops.Dataset.from_tensor_slices(self.input_values).map(map_fn)
-        .repeat(self.repeat_count).apply(
-            interleave_ops.parallel_interleave(interleave_fn, self.cycle_length,
-                                               self.block_length, self.sloppy,
-                                               self.buffer_output_elements,
-                                               self.prefetch_input_elements)))
-
-    self.iterator = self.dataset.make_initializable_iterator()
-    self.init_op = self.iterator.initializer
-    self.next_element = self.iterator.get_next()
-
-    with self.test_session() as sess:
-      sess.run(
-          self.init_op,
-          feed_dict={
-              self.input_values: [4, 5, 6],
-              self.cycle_length: 2,
-              self.block_length: 1,
-              self.sloppy: False,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
-          })
-      for i, expected_element in enumerate(
-          self._interleave([[4] * 4, [5], [6] * 6] * self.repeat_count, 2, 1)):
-        if expected_element == 5:
-          with self.assertRaises(errors.InvalidArgumentError):
-            sess.run(self.next_element)
-        else:
-          actual_element = sess.run(self.next_element)
-          self.assertEqual(expected_element, actual_element,
-                           "At index %s: %s expected, got: %s" %
-                           (i, expected_element, actual_element))
-      with self.assertRaises(errors.OutOfRangeError):
-        sess.run(self.next_element)
-
-  def testErrorsInInterleaveFn(self):
-
-    def map_py_fn(x):
-      if x == 5:
-        raise ValueError()
-      return x
-
-    def interleave_fn(x):
-      dataset = dataset_ops.Dataset.from_tensors(x)
-      y = script_ops.py_func(map_py_fn, [x], x.dtype)
-      dataset = dataset.repeat(y)
-      return dataset
-
-    self.dataset = (
-        dataset_ops.Dataset.from_tensor_slices(self.input_values)
-        .repeat(self.repeat_count).apply(
-            interleave_ops.parallel_interleave(interleave_fn, self.cycle_length,
-                                               self.block_length, self.sloppy,
-                                               self.buffer_output_elements,
-                                               self.prefetch_input_elements)))
-
-    self.iterator = self.dataset.make_initializable_iterator()
-    self.init_op = self.iterator.initializer
-    self.next_element = self.iterator.get_next()
-
-    with self.test_session() as sess:
-      sess.run(
-          self.init_op,
-          feed_dict={
-              self.input_values: [4, 5, 6],
-              self.cycle_length: 2,
-              self.block_length: 1,
-              self.sloppy: False,
-              self.buffer_output_elements: 1,
-              self.prefetch_input_elements: 0,
-          })
-      for i, expected_element in enumerate(
-          self._interleave([[4] * 4, [5], [6] * 6] * self.repeat_count, 2, 1)):
-        if expected_element == 5:
-          with self.assertRaises(errors.InvalidArgumentError):
-            sess.run(self.next_element)
-        else:
-          actual_element = sess.run(self.next_element)
-          self.assertEqual(expected_element, actual_element,
-                           "At index %s: %s expected, got: %s" %
-                           (i, expected_element, actual_element))
-      with self.assertRaises(errors.OutOfRangeError):
-        sess.run(self.next_element)
 
 
 if __name__ == "__main__":

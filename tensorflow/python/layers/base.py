@@ -493,8 +493,7 @@ class Layer(object):
 
     self._set_scope(None)
     with vs.variable_scope(
-        self._scope, reuse=(self.built or self._reuse),
-        auxiliary_name_scope=False) as scope:
+        self._scope, reuse=(self.built or self._reuse)) as scope:
       with ops.name_scope(self._name_scope_name(scope)):
         variable = vs.get_variable(name,
                                    shape=shape,
@@ -603,11 +602,11 @@ class Layer(object):
         # variable scope with this setting. We avoid re-creating variable scopes
         # after this point as an optimization.
         self._always_reuse_variable_scope = vs.variable_scope(
-            self._scope, reuse=True, auxiliary_name_scope=False)
+            self._scope, reuse=True)
         scope_context_manager = self._always_reuse_variable_scope
     else:
       scope_context_manager = vs.variable_scope(
-          self._scope, reuse=self._reuse, auxiliary_name_scope=False)
+          self._scope, reuse=self._reuse)
     with scope_context_manager as scope:
       with ops.name_scope(self._name_scope_name(scope)):
         if not self.built:
@@ -630,7 +629,7 @@ class Layer(object):
           self._assert_input_compatibility(inputs)
           if input_list and self._dtype is None:
             try:
-              self._dtype = input_list[0].dtype.base_dtype.name
+              self._dtype = input_list[0].dtype.name
             except AttributeError:
               pass
           input_shapes = nest.map_structure(lambda x: x.get_shape(), inputs)

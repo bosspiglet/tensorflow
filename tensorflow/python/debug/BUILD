@@ -53,12 +53,6 @@ py_library(
 )
 
 py_library(
-    name = "common",
-    srcs = ["lib/common.py"],
-    srcs_version = "PY2AND3",
-)
-
-py_library(
     name = "debug_graphs",
     srcs = ["lib/debug_graphs.py"],
     srcs_version = "PY2AND3",
@@ -123,7 +117,6 @@ py_library(
     srcs = ["lib/source_remote.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":common",
         ":debug_service_pb2_grpc",
         "//tensorflow/core/debug:debug_service_proto_py",
         "//tensorflow/python/profiler:tfprof_logger",
@@ -200,11 +193,9 @@ py_library(
     srcs_version = "PY2AND3",
     deps = [
         ":command_parser",
-        ":common",
         ":debugger_cli_common",
         ":tensor_format",
         "//tensorflow/python:framework_for_generated_wrappers",
-        "//tensorflow/python:platform",
         "//tensorflow/python:variables",
         "//third_party/py/numpy",
         "@six_archive//:six",
@@ -343,11 +334,7 @@ py_library(
     name = "grpc_wrapper",
     srcs = ["wrappers/grpc_wrapper.py"],
     srcs_version = "PY2AND3",
-    deps = [
-        ":common",
-        ":framework",
-        ":source_remote",
-    ],
+    deps = [":framework"],
 )
 
 py_library(
@@ -358,7 +345,6 @@ py_library(
         ":analyzer_cli",
         ":cli_shared",
         ":command_parser",
-        ":common",
         ":debug_data",
         ":debugger_cli_common",
         ":framework",
@@ -450,20 +436,6 @@ py_binary(
         "//tensorflow:tensorflow_py",
         "//third_party/py/numpy",
         "@six_archive//:six",
-    ],
-)
-
-py_test(
-    name = "common_test",
-    size = "small",
-    srcs = ["lib/common_test.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        ":common",
-        "//tensorflow/python:client",
-        "//tensorflow/python:client_testlib",
-        "//tensorflow/python:constant_op",
-        "//tensorflow/python:platform_test",
     ],
 )
 

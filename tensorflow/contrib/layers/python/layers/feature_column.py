@@ -156,10 +156,6 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.util import deprecation
 
 
-# Imports the core `InputLayer` symbol in contrib during development.
-InputLayer = fc_core.InputLayer  # pylint: disable=invalid-name
-
-
 class _LinearEmbeddingLookupArguments(
     collections.namedtuple("_LinearEmbeddingLookupArguments",
                            ["input_tensor",

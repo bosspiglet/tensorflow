@@ -254,8 +254,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.125),
         alignment_history=())
     expected_final_alignment_history = ResultSummary(
         shape=(3, 5, 8), dtype=dtype('float32'), mean=0.12500001)
@@ -288,8 +286,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.125),
         alignment_history=())
 
     self._testWithAttention(
@@ -316,8 +312,6 @@ class AttentionWrapperTest(test.TestCase):
             shape=(5, 6), dtype=dtype('float32'), mean=-0.0051812846),
         time=3,
         alignments=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-        attention_state=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.125),
         alignment_history=())
 
@@ -348,8 +342,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.125),
         alignment_history=())
 
     self._testWithAttention(
@@ -377,8 +369,6 @@ class AttentionWrapperTest(test.TestCase):
             shape=(5, 10), dtype=dtype('float32'), mean=0.117389656,),
         time=3,
         alignments=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-        attention_state=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.125),
         alignment_history=())
 
@@ -555,8 +545,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.032228071),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.032228071),
         alignment_history=())
     expected_final_alignment_history = ResultSummary(
         shape=(3, 5, 8), dtype=dtype('float32'), mean=0.050430927)
@@ -590,8 +578,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.028698336),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.028698336),
         alignment_history=())
     expected_final_alignment_history = ResultSummary(
         shape=(3, 5, 8), dtype=dtype('float32'), mean=0.046009291)
@@ -613,8 +599,7 @@ class AttentionWrapperTest(test.TestCase):
           random_ops.random_normal((b, t, u)),
           mode='hard')
       # Just feed previous attention as [1, 0, 0, ...]
-      attn, unused_state = a(
-          random_ops.random_normal((b, d)), array_ops.one_hot([0]*b, t))
+      attn = a(random_ops.random_normal((b, d)), array_ops.one_hot([0]*b, t))
       sess.run(variables.global_variables_initializer())
       attn_out = attn.eval()
       # All values should be 0 or 1
@@ -643,8 +628,6 @@ class AttentionWrapperTest(test.TestCase):
             shape=(5, 6), dtype=dtype('float32'), mean=-5.2024145e-05),
         time=3,
         alignments=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.032198936),
-        attention_state=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.032198936),
         alignment_history=())
     expected_final_alignment_history = ResultSummary(
@@ -680,8 +663,6 @@ class AttentionWrapperTest(test.TestCase):
         time=3,
         alignments=ResultSummary(
             shape=(5, 8), dtype=dtype('float32'), mean=0.032198936),
-        attention_state=ResultSummary(
-            shape=(5, 8), dtype=dtype('float32'), mean=0.032198936),
         alignment_history=())
     expected_final_alignment_history = ResultSummary(
         shape=(3, 5, 8), dtype=dtype('float32'), mean=0.050387777)
@@ -716,9 +697,6 @@ class AttentionWrapperTest(test.TestCase):
         alignments=(
             ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),
             ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125)),
-        attention_state=(
-            ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-            ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125)),
         alignment_history=())
 
     expected_final_alignment_history = (
@@ -745,8 +723,7 @@ class AttentionWrapperTest(test.TestCase):
           random_ops.random_normal((b, t, u)),
           mode='hard')
       # Just feed previous attention as [1, 0, 0, ...]
-      attn, unused_state = a(
-          random_ops.random_normal((b, d)), array_ops.one_hot([0]*b, t))
+      attn = a(random_ops.random_normal((b, d)), array_ops.one_hot([0]*b, t))
       sess.run(variables.global_variables_initializer())
       attn_out = attn.eval()
       # All values should be 0 or 1
@@ -774,9 +751,6 @@ class AttentionWrapperTest(test.TestCase):
             shape=(5, 20), dtype=dtype('float32'), mean=0.11680689),
         time=3,
         alignments=(
-            ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),
-            ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125)),
-        attention_state=(
             ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),
             ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125)),
         alignment_history=())
@@ -812,8 +786,6 @@ class AttentionWrapperTest(test.TestCase):
             shape=(5, 3), dtype=dtype('float32'), mean=-0.0098808752),
         time=3,
         alignments=(
-            ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),),
-        attention_state=(
             ResultSummary(shape=(5, 8), dtype=dtype('float32'), mean=0.125),),
         alignment_history=())
 

@@ -69,7 +69,7 @@ class FillOp : public XlaOpKernel {
   }
 };
 
-REGISTER_XLA_OP(Name("Fill").CompileTimeConstInput("dims"), FillOp);
+REGISTER_XLA_OP(Name("Fill"), FillOp);
 
 }  // namespace
 }  // namespace tensorflow

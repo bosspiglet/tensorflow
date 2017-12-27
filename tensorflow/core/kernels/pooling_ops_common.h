@@ -86,9 +86,7 @@ class MaxPoolingOp : public OpKernel {
                   errors::InvalidArgument("Invalid data format"));
       OP_REQUIRES(
           context, data_format_ == FORMAT_NHWC,
-          errors::InvalidArgument("Default MaxPoolingOp only supports NHWC ",
-                                  "on device type ",
-                                  DeviceTypeString(context->device_type())));
+          errors::InvalidArgument("Default MaxPoolingOp only supports NHWC."));
     } else {
       data_format_ = FORMAT_NHWC;
     }

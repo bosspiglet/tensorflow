@@ -124,13 +124,6 @@ config_setting(
     },
 )
 
-config_setting(
-    name = "freebsd",
-    values = {
-        "cpu": "freebsd",
-    },
-)
-
 cc_library(
     name = "optimized_base",
     srcs = [],
@@ -154,7 +147,6 @@ cc_library(
         ":x86": tflite_deps_intel,
         ":x86_64": tflite_deps_intel,
         ":darwin": tflite_deps_intel,
-        ":freebsd": tflite_deps_intel,
         "//conditions:default": [],
     }),
 )
@@ -232,7 +224,6 @@ cc_library(
         ":x86": tflite_deps_intel,
         ":x86_64": tflite_deps_intel,
         ":darwin": tflite_deps_intel,
-        ":freebsd": tflite_deps_intel,
         "//conditions:default": [],
     }),
 )

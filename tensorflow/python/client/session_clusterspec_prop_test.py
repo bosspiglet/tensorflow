@@ -77,8 +77,7 @@ class SessionClusterSpecPropagationTest(test_util.TensorFlowTestCase):
     config = config_pb2.ConfigProto(cluster_def=cluster_def)
 
     with ops.Graph().as_default() as g, ops.device('/job:worker/task:1'):
-      with ops.device('/cpu:0'):	 
-        const = constant_op.constant(17)
+      const = constant_op.constant(17)
     sess = session.Session(server1.target, config=config, graph=g)
     run_options = config_pb2.RunOptions(
         trace_level=config_pb2.RunOptions.FULL_TRACE)

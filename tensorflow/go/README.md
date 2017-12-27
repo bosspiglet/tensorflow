@@ -26,12 +26,9 @@ from source.
     ([Linux](https://www.tensorflow.org/install/install_sources#PrepareLinux)
     or [OS
     X](https://www.tensorflow.org/install/install_sources#PrepareMac)).
-    If you don't need GPU support, then try the following:
-
-    ```sh
-    sudo apt-get install python swig python-numpy # Linux
-    brew install swig                             # OS X with homebrew
-    ```
+    If you don't need GPU support, then try the following: `sh # Linux sudo
+    apt-get install python swig python-numpy # OS X with homebrew brew install
+    swig`
 
 ### Build
 

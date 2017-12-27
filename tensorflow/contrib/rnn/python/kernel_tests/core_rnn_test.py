@@ -2175,9 +2175,9 @@ class DeviceWrapperCell(rnn_cell.RNNCell):
   def __call__(self, input_, state, scope=None):
     if self._device is not None:
       with ops_lib.device(self._device):
-        return self._cell(input_, state, scope=scope)
+        return self._cell(input_, state, scope)
     else:
-      return self._cell(input_, state, scope=scope)
+      return self._cell(input_, state, scope)
 
 
 class TensorArrayOnCorrectDeviceTest(test.TestCase):

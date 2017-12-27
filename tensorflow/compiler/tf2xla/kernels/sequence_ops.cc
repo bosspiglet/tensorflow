@@ -138,11 +138,7 @@ class RangeOp : public XlaOpKernel {
   }
 };
 
-REGISTER_XLA_OP(Name("Range")
-                    .CompileTimeConstInput("start")
-                    .CompileTimeConstInput("limit")
-                    .CompileTimeConstInput("delta"),
-                RangeOp);
+REGISTER_XLA_OP(Name("Range"), RangeOp);
 
 class LinSpaceOp : public XlaOpKernel {
  public:
@@ -211,11 +207,7 @@ class LinSpaceOp : public XlaOpKernel {
   }
 };
 
-REGISTER_XLA_OP(Name("LinSpace")
-                    .CompileTimeConstInput("start")
-                    .CompileTimeConstInput("stop")
-                    .CompileTimeConstInput("num"),
-                LinSpaceOp);
+REGISTER_XLA_OP(Name("LinSpace"), LinSpaceOp);
 
 }  // namespace
 }  // namespace tensorflow

@@ -138,11 +138,8 @@ class HloComputation {
   void UniquifyName(NameUniquer* name_uniquer);
 
   // Return a string representation of the computation.
-  //
-  // (We express the default options using an overload rather than a default
-  // param because gdb ignores default params, but does resolve overloads.)
-  string ToString() const { return ToString(HloPrintOptions()); }
-  string ToString(const HloPrintOptions& options) const;
+  string ToString(int nested_level = 0,
+                  bool include_large_constants = false) const;
 
   // Returns a serialized representation of this computation.
   HloComputationProto ToProto() const;

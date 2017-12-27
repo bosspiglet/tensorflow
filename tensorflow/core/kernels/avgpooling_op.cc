@@ -56,9 +56,7 @@ class AvgPoolingOp : public UnaryOp<T> {
                 errors::InvalidArgument("Invalid data format"));
     OP_REQUIRES(
         context, data_format_ == FORMAT_NHWC,
-        errors::InvalidArgument("Default AvgPoolingOp only supports NHWC ",
-                                "on device type ",
-                                DeviceTypeString(context->device_type())));
+        errors::InvalidArgument("Default AvgPoolingOp only supports NHWC."));
     OP_REQUIRES_OK(context, context->GetAttr("ksize", &ksize_));
     OP_REQUIRES(context, ksize_.size() == 4,
                 errors::InvalidArgument("Sliding window ksize field must "
@@ -213,11 +211,9 @@ class AvgPoolingGradOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("data_format", &data_format));
     OP_REQUIRES(context, FormatFromString(data_format, &data_format_),
                 errors::InvalidArgument("Invalid data format"));
-    OP_REQUIRES(
-        context, data_format_ == FORMAT_NHWC,
-        errors::InvalidArgument("Default AvgPoolingGradOp only supports NHWC ",
-                                "on device type ",
-                                DeviceTypeString(context->device_type())));
+    OP_REQUIRES(context, data_format_ == FORMAT_NHWC,
+                errors::InvalidArgument(
+                    "Default AvgPoolingGradOp only supports NHWC."));
     OP_REQUIRES_OK(context, context->GetAttr("ksize", &ksize_));
     OP_REQUIRES(context, ksize_.size() == 4,
                 errors::InvalidArgument("Sliding window ksize field must "

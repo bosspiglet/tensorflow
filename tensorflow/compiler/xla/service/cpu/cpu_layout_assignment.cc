@@ -34,47 +34,34 @@ namespace cpu {
 // instruction stream.
 
 namespace {
-using ::tensorflow::gtl::nullopt;
-using ::tensorflow::gtl::optional;
-
-using ShouldMakeOperandColMajorCache =
+using ShouldMakeRhsColMajorCache =
     tensorflow::gtl::FlatMap<const HloInstruction*, bool>;
-}  // namespace
-
-static bool ShouldMakeAllUsersColMajor(const HloInstruction* instruction) {
-  for (auto* user : instruction->users()) {
-    optional<int64> operand_idx = ProfitableToMakeDotOperandColumnMajor(*user);
-    if (!operand_idx || user->operand(*operand_idx) != instruction ||
-        std::count(user->operands().begin(), user->operands().end(),
-                   instruction) != 1) {
-      return false;
-    }
-  }
-  return true;
 }
 
-static optional<int64> ShouldMakeOperandColumnMajor(
-    ShouldMakeOperandColMajorCache* cache, const HloInstruction& instruction) {
-  optional<int64> operand_idx =
-      ProfitableToMakeDotOperandColumnMajor(instruction);
-  if (!operand_idx) {
-    return nullopt;
+static bool ShouldMakeRhsColMajor(ShouldMakeRhsColMajorCache* cache,
+                                  const HloInstruction& instruction) {
+  if (!ProfitableToMakeDotRhsColumnMajor(instruction)) {
+    return false;
   }
 
-  const HloInstruction* operand = instruction.operand(*operand_idx);
-  if (operand->opcode() != HloOpcode::kConstant) {
-    return nullopt;
+  const auto* rhs = instruction.operand(1);
+  if (rhs->opcode() != HloOpcode::kConstant) {
+    return false;
   }
 
-  auto it = cache->find(operand);
-  if (it == cache->end()) {
-    auto insert_result =
-        cache->insert({operand, ShouldMakeAllUsersColMajor(operand)});
-    CHECK(insert_result.second);
-    it = insert_result.first;
+  auto it = cache->find(rhs);
+  if (it != cache->end()) {
+    return it->second;
   }
 
-  return it->second ? operand_idx : nullopt;
+  bool result = std::all_of(rhs->users().begin(), rhs->users().end(),
+                            [&](HloInstruction* user) {
+                              return ProfitableToMakeDotRhsColumnMajor(*user) &&
+                                     user->operand(0) != rhs;
+                            });
+
+  InsertOrDie(cache, rhs, result);
+  return result;
 }
 
 static Shape RowMajorShape(const Shape& old_shape) {
@@ -95,7 +82,7 @@ static Shape ColMajorShape(const Shape& old_shape) {
 
 Status CpuLayoutAssignment::AddBackendConstraints(
     LayoutConstraints* constraints) {
-  ShouldMakeOperandColMajorCache cache;
+  ShouldMakeRhsColMajorCache cache;
 
   const HloComputation* computation = constraints->computation();
   for (auto* instruction : computation->instructions()) {
@@ -121,11 +108,11 @@ Status CpuLayoutAssignment::AddBackendConstraints(
           constraints->SetOperandLayout(filter_shape, convolution, 1));
       TF_RETURN_IF_ERROR(
           constraints->SetInstructionLayout(output_shape, convolution));
-    } else if (optional<int64> op_idx =
-                   ShouldMakeOperandColumnMajor(&cache, *instruction)) {
-      const HloInstruction* op = instruction->operand(*op_idx);
-      TF_RETURN_IF_ERROR(constraints->SetOperandLayout(
-          ColMajorShape(op->shape()), instruction, *op_idx));
+    } else if (ShouldMakeRhsColMajor(&cache, *instruction)) {
+      auto* dot = instruction;
+      const auto& rhs_shape = dot->operand(1)->shape();
+      TF_RETURN_IF_ERROR(
+          constraints->SetOperandLayout(ColMajorShape(rhs_shape), dot, 1));
     } else if (PotentiallyImplementedAsEigenDot(*instruction)) {
       const HloInstruction* dot = instruction;
       // In order to implement `dot` with Eigen dot, the layouts of the lhs,

@@ -306,8 +306,6 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
     return false;
   }
 
-  auto print_no_metadata = HloPrintOptions().set_print_metadata(false);
-
   // Bail if param0 of while_cond or while_body has users which aren't of type
   // get-tuple-element.
   for (const HloInstruction* instr : {while_body->parameter_instruction(0),
@@ -315,10 +313,9 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
     for (const HloInstruction* user : instr->users()) {
       if (user->opcode() != HloOpcode::kGetTupleElement) {
         VLOG(2) << "Cowardly refusing to analyze while loop with "
-                << instr->ToString(print_no_metadata)
-                << " used by non-GTE instruction "
-                << user->ToString(print_no_metadata) << " in computation "
-                << instr->parent()->name();
+                << instr->ToStringNoMetadata()
+                << " used by non-GTE instruction " << user->ToStringNoMetadata()
+                << " in computation " << instr->parent()->name();
         return false;
       }
     }
@@ -354,7 +351,7 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
 
       used_tuple_indices.insert(user->tuple_index());
       if (used_tuple_indices.size() == tuple_size) {
-        VLOG(2) << "Loop " << while_op->ToString(print_no_metadata)
+        VLOG(2) << "Loop " << while_op->ToStringNoMetadata()
                 << " uses all of its inputs; no simplification possible.";
         return false;
       }
@@ -378,7 +375,7 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
       used_tuple_indices.insert(i);
 
       if (used_tuple_indices.size() == tuple_size) {
-        VLOG(2) << "Loop " << while_op->ToString(print_no_metadata)
+        VLOG(2) << "Loop " << while_op->ToStringNoMetadata()
                 << " uses all of its inputs; no simplification possible.";
         return false;
       }
@@ -390,8 +387,7 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
   CHECK_LT(used_tuple_indices.size(), tuple_size);
 
   VLOG(1) << "Eliminating " << tuple_size - used_tuple_indices.size()
-          << " elements from tuple of "
-          << while_op->ToString(print_no_metadata);
+          << " elements from tuple of " << while_op->ToStringNoMetadata();
 
   // Build up maps from the old/new to the new/old tuple indices.
   std::vector<int64> new_to_old_tuple_idx(used_tuple_indices.begin(),
@@ -435,7 +431,7 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
         continue;
       }
       CHECK_EQ(user->opcode(), HloOpcode::kGetTupleElement)
-          << user->ToString(print_no_metadata);
+          << user->ToStringNoMetadata();
 
       int64 old_idx = user->tuple_index();
       auto new_idx_iter = old_to_new_tuple_idx.find(old_idx);
@@ -450,14 +446,14 @@ static StatusOr<bool> TryRemoveDeadWhileParams(HloInstruction* while_op) {
         CHECK(user->user_count() == 0 ||
               user->user_count() == 1 &&
                   user->users().front() == while_body_root)
-            << "Instruction " << user->ToString(print_no_metadata)
+            << "Instruction " << user->ToStringNoMetadata()
             << " should be unused (except by root of while body), but has "
                "users: {"
             << tensorflow::str_util::Join(
                    user->users(), ", ",
-                   [&](string* out, const HloInstruction* instr) {
+                   [](string* out, const HloInstruction* instr) {
                      tensorflow::strings::StrAppend(
-                         out, instr->ToString(print_no_metadata));
+                         out, instr->ToStringNoMetadata());
                    })
             << "}";
 

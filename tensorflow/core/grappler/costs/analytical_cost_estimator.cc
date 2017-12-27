@@ -34,15 +34,13 @@ AnalyticalCostEstimator::AnalyticalCostEstimator(Cluster* cluster,
                                                  bool use_static_shapes)
     : cluster_(cluster),
       node_estimator_(new OpLevelCostEstimator()),
-      node_manager_(VirtualScheduler::ReadyNodeManagerFactory("FirstReady")),
       use_static_shapes_(use_static_shapes) {}
 
 AnalyticalCostEstimator::AnalyticalCostEstimator(
     Cluster* cluster, OpLevelCostEstimator* node_estimator,
-    ReadyNodeManager* node_manager, bool use_static_shapes)
+    bool use_static_shapes)
     : cluster_(cluster),
       node_estimator_(node_estimator),
-      node_manager_(node_manager),
       use_static_shapes_(use_static_shapes) {}
 
 Status AnalyticalCostEstimator::Initialize(const GrapplerItem& item) {
@@ -63,8 +61,7 @@ Status AnalyticalCostEstimator::PredictCosts(const GraphDef& optimized_graph,
     }
   }
   std::vector<string> inaccurate_nodes;
-  VirtualScheduler scheduler(&item, use_static_shapes_, cluster_,
-                             node_manager_.get());
+  VirtualScheduler scheduler(&item, use_static_shapes_, cluster_);
   auto status = scheduler.Init();
   if (!status.ok()) {
     costs->execution_time = Costs::Duration::max();

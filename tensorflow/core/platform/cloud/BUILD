@@ -11,7 +11,6 @@ load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
     "tf_copts",
-    "if_windows",
 )
 
 filegroup(
@@ -262,7 +261,6 @@ tf_cc_test(
     name = "gcs_dns_cache_test",
     size = "small",
     srcs = ["gcs_dns_cache_test.cc"],
-    linkopts = if_windows(["-DEFAULTLIB:ws2_32.lib"]),
     deps = [
         ":gcs_dns_cache",
         "//tensorflow/core:lib",

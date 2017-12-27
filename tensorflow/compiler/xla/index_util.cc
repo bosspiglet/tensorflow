@@ -78,7 +78,7 @@ namespace xla {
   int64 scale = 1;
   int64 linear_index = 0;
   bool first = true;
-  for (auto dimension : LayoutUtil::MinorToMajor(shape)) {
+  for (auto dimension : shape.layout().minor_to_major()) {
     if (first) {
       // Avoid two multiplies on the first loop iteration
       linear_index = multi_index[dimension];
@@ -110,7 +110,7 @@ namespace xla {
 
   // Accumulated product D{L(0)} * D{L(1)} * ...
   int64 divisor = 1;
-  for (auto dimension : LayoutUtil::MinorToMajor(shape)) {
+  for (auto dimension : shape.layout().minor_to_major()) {
     multi_index[dimension] =
         (linear_index / divisor) % shape.dimensions(dimension);
     divisor *= shape.dimensions(dimension);
@@ -133,17 +133,18 @@ namespace xla {
 
 /* static */ int64 IndexUtil::GetDimensionStride(const Shape& shape,
                                                  int64 dimension) {
-  int64 pdim_size = LayoutUtil::PaddedDimensions(shape).size();
+  const Layout& layout = shape.layout();
+  int64 pdim_size = layout.padded_dimensions_size();
   int64 stride = 1;
   DCHECK(pdim_size == 0 || pdim_size == shape.dimensions_size());
-  for (auto dim : LayoutUtil::MinorToMajor(shape)) {
+  for (auto dim : layout.minor_to_major()) {
     if (dim == dimension) {
       break;
     }
     if (pdim_size == 0) {
       stride *= shape.dimensions(dim);
     } else {
-      stride *= LayoutUtil::PaddedDimension(shape, dim);
+      stride *= layout.padded_dimensions(dim);
     }
   }
   return stride;

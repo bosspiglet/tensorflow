@@ -36,9 +36,6 @@ option cc_enable_arenas = true;
 
 // Serialization of HloInstruction.
 message HloInstructionProto {
-  reserved 10;
-  reserved "parameter_name";
-
   string name = 1;
   string opcode = 2;
   xla.Shape shape = 3;
@@ -53,8 +50,9 @@ message HloInstructionProto {
   // Literal, only present for kConstant.
   xla.LiteralProto literal = 8;
 
-  // Parameter number is only present for kParameter.
+  // Parameter info, only present for kParameter.
   int64 parameter_number = 9;
+  string parameter_name = 10;
 
   // Fusion state, only present for kFusion.
   string fusion_kind = 11;

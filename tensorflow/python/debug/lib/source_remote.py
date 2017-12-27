@@ -24,7 +24,6 @@ import grpc
 
 from tensorflow.core.debug import debug_service_pb2
 from tensorflow.core.protobuf import debug_pb2
-from tensorflow.python.debug.lib import common
 from tensorflow.python.debug.lib import debug_service_pb2_grpc
 from tensorflow.python.debug.lib import source_utils
 from tensorflow.python.platform import gfile
@@ -131,11 +130,6 @@ def _send_call_tracebacks(destinations,
   """
   if not isinstance(destinations, list):
     destinations = [destinations]
-  # Strip grpc:// prefix, if any is present.
-  destinations = [
-      dest[len(common.GRPC_URL_PREFIX):]
-      if dest.startswith(common.GRPC_URL_PREFIX) else dest
-      for dest in destinations]
 
   call_type = (debug_service_pb2.CallTraceback.EAGER_EXECUTION
                if is_eager_execution

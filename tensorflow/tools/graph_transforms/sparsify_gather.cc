@@ -89,10 +89,7 @@ Status ObtainTensorSlice(const GraphDef& input_graph_def,
                          string* shape_slice_string) {
   string restore_node_name;
   for (const auto& node : input_graph_def.node()) {
-    std::vector<string> node_name_parts = str_util::Split(node.name(), "/");
-    if (node_name_parts.size() == 2 &&
-        StringPiece(node_name_parts[0]).starts_with("save") &&
-        StringPiece(node_name_parts[1]).starts_with("Assign") &&
+    if (StringPiece(node.name()).starts_with("save/Assign") &&
         node.input(0) == tensor_name) {
       restore_node_name = node.input(1);
       break;

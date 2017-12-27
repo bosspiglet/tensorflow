@@ -143,7 +143,7 @@ bool HardcodeMinMaxForAverageOrMaxPool(Model* model, Operator* op) {
   return true;
 }
 
-bool HardcodeMinMaxFromFirstInput(Model* model, Operator* op) {
+bool HardcodeMinMaxForReshapeOrSqueeze(Model* model, Operator* op) {
   auto& output_array = model->GetArray(op->outputs[0]);
   if (output_array.minmax) {
     return false;
@@ -203,8 +203,7 @@ bool HardcodeMinMax::Run(Model* model, std::size_t op_index) {
 
     case OperatorType::kSqueeze:
     case OperatorType::kTensorFlowReshape:
-    case OperatorType::kPad:
-      changed = HardcodeMinMaxFromFirstInput(model, op);
+      changed = HardcodeMinMaxForReshapeOrSqueeze(model, op);
       break;
 
     case OperatorType::kLogistic:
