@@ -155,13 +155,6 @@ def main(_):
             result = 'unknown'
         wr.writerow([filename, result])
 
-    # print(test_filepaths)
-    #for predicted_index in predict_result[0]: 
-    #    test_filepaths
-    #    print('%s %s', predicted_index,  
-        # print(audio_processor.words_list[predicted_index])
-
-    # tf.logging.info('predict_result %s', predict_result[0]) 
   f.close()
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()

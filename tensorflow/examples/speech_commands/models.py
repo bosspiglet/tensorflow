@@ -23,10 +23,11 @@ import math
 
 import tensorflow as tf
 
-
 def prepare_model_settings(label_count, sample_rate, clip_duration_ms,
                            window_size_ms, window_stride_ms,
-                           dct_coefficient_count):
+                           dct_coefficient_count,
+                           weight_initialize_method="truncated_normal",
+                           bias_initialize_method="zeros"):
   """Calculates common settings needed for all models.
 
   Args:
@@ -40,6 +41,14 @@ def prepare_model_settings(label_count, sample_rate, clip_duration_ms,
   Returns:
     Dictionary containing common settings.
   """
+  global weight_initialize_method
+  global bias_initialize_method
+  weight_initialize_method = weight_initialize_method
+  bias_initialize_method = bias_initialize_method
+
+  tf.logging.info('weight_initialize_method %s', weight_initialize_method) 
+  tf.logging.info('bias_initialize_method %s', bias_initialize_method) 
+
   desired_samples = int(sample_rate * clip_duration_ms / 1000)
   window_size_samples = int(sample_rate * window_size_ms / 1000)
   window_stride_samples = int(sample_rate * window_stride_ms / 1000)
@@ -111,6 +120,21 @@ def create_model(fingerprint_input, model_settings, model_architecture,
                     '" not recognized, should be one of "single_fc", "conv",' +
                     ' "low_latency_conv, or "low_latency_svdf"')
 
+def get_initial_value(shape, kind, stddev_val=None):
+  """Utility function to centralize checkpoint restoration.
+
+  Args:
+    shape: shape of initial tensor
+    kind: "truncated_normal", "xavier", "he", "zeros"
+    stddev_val: (optional)
+  """
+  if kind == "truncated_normal":
+    return tf.Variable(tf.truncated_normal(shape, stddev=stddev_val))
+  elif kind == "xavier":
+    initializer = tf.contrib.layers.xavier_initializer()
+    return tf.Variable(initializer(shape))
+  elif kind == "zeros":
+    return tf.Variable(tf.zeros(shape))
 
 def load_variables_from_checkpoint(sess, start_checkpoint):
   """Utility function to centralize checkpoint restoration.
@@ -152,9 +176,17 @@ def create_single_fc_model(fingerprint_input, model_settings, is_training):
     dropout_prob = tf.placeholder(tf.float32, name='dropout_prob')
   fingerprint_size = model_settings['fingerprint_size']
   label_count = model_settings['label_count']
-  weights = tf.Variable(
-      tf.truncated_normal([fingerprint_size, label_count], stddev=0.001))
-  bias = tf.Variable(tf.zeros([label_count]))
+  
+  weights = get_initial_value(
+    [fingerprint_size, label_count],
+    weight_initialize_method,
+    0.001
+  )  
+  bais = get_initial_value(
+    [label_count],
+    bias_initialize_method
+  )
+
   logits = tf.matmul(fingerprint_input, weights) + bias
   if is_training:
     return logits, dropout_prob
@@ -219,11 +251,17 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   first_filter_width = 8
   first_filter_height = 20
   first_filter_count = 64
-  first_weights = tf.Variable(
-      tf.truncated_normal(
-          [first_filter_height, first_filter_width, 1, first_filter_count],
-          stddev=0.01))
-  first_bias = tf.Variable(tf.zeros([first_filter_count]))
+
+  first_weights = get_initial_value(
+    [first_filter_height, first_filter_width, 1, first_filter_count],
+    weight_initialize_method,
+    0.01
+  )  
+  first_bias = get_initial_value(
+    [first_filter_count],
+    bais_initial_type
+  )
+
   first_conv = tf.nn.conv2d(fingerprint_4d, first_weights, [1, 1, 1, 1],
                             'SAME') + first_bias
   first_relu = tf.nn.relu(first_conv)
@@ -235,14 +273,20 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   second_filter_width = 4
   second_filter_height = 10
   second_filter_count = 64
-  second_weights = tf.Variable(
-      tf.truncated_normal(
-          [
-              second_filter_height, second_filter_width, first_filter_count,
-              second_filter_count
-          ],
-          stddev=0.01))
-  second_bias = tf.Variable(tf.zeros([second_filter_count]))
+
+  second_weights = get_initial_value(
+    [
+        second_filter_height, second_filter_width, first_filter_count,
+        second_filter_count
+    ],
+    weight_initialize_method,
+    0.01
+  )  
+  second_bias = get_initial_value(
+    [second_filter_count],
+    bais_initial_type
+  )
+
   second_conv = tf.nn.conv2d(max_pool, second_weights, [1, 1, 1, 1],
                              'SAME') + second_bias
   second_relu = tf.nn.relu(second_conv)
@@ -259,10 +303,17 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   flattened_second_conv = tf.reshape(second_dropout,
                                      [-1, second_conv_element_count])
   label_count = model_settings['label_count']
-  final_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [second_conv_element_count, label_count], stddev=0.01))
-  final_fc_bias = tf.Variable(tf.zeros([label_count]))
+
+  final_fc_weights = get_initial_value(
+    [second_conv_element_count, label_count],
+    weight_initialize_method,
+    0.01
+  )  
+  final_fc_bias = get_initial_value(
+    [label_count],
+    bais_initial_type
+  )
+
   final_fc = tf.matmul(flattened_second_conv, final_fc_weights) + final_fc_bias
   if is_training:
     return final_fc, dropout_prob
@@ -327,11 +378,17 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   first_filter_count = 186
   first_filter_stride_x = 1
   first_filter_stride_y = 1
-  first_weights = tf.Variable(
-      tf.truncated_normal(
-          [first_filter_height, first_filter_width, 1, first_filter_count],
-          stddev=0.01))
-  first_bias = tf.Variable(tf.zeros([first_filter_count]))
+
+  first_weights = get_initial_value(
+    [first_filter_height, first_filter_width, 1, first_filter_count],
+    weight_initialize_method,
+    0.01
+  )  
+  first_bias = get_initial_value(
+    [labfirst_filter_countel_count],
+    bais_initial_type
+  )
+
   first_conv = tf.nn.conv2d(fingerprint_4d, first_weights, [
       1, first_filter_stride_y, first_filter_stride_x, 1
   ], 'VALID') + first_bias
@@ -351,30 +408,51 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   flattened_first_conv = tf.reshape(first_dropout,
                                     [-1, first_conv_element_count])
   first_fc_output_channels = 128
-  first_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [first_conv_element_count, first_fc_output_channels], stddev=0.01))
-  first_fc_bias = tf.Variable(tf.zeros([first_fc_output_channels]))
+
+  first_fc_weights = get_initial_value(
+    [first_conv_element_count, first_fc_output_channels],
+    weight_initialize_method,
+    0.01
+  )  
+  first_fc_bias = get_initial_value(
+    [first_fc_output_channels],
+    bais_initial_type
+  )
+
   first_fc = tf.matmul(flattened_first_conv, first_fc_weights) + first_fc_bias
   if is_training:
     second_fc_input = tf.nn.dropout(first_fc, dropout_prob)
   else:
     second_fc_input = first_fc
   second_fc_output_channels = 128
-  second_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [first_fc_output_channels, second_fc_output_channels], stddev=0.01))
-  second_fc_bias = tf.Variable(tf.zeros([second_fc_output_channels]))
+
+  second_fc_weights = get_initial_value(
+    [first_fc_output_channels, second_fc_output_channels],
+    weight_initialize_method,
+    0.01
+  )  
+  second_fc_bias = get_initial_value(
+    [second_fc_output_channels],
+    bais_initial_type
+  )
+
   second_fc = tf.matmul(second_fc_input, second_fc_weights) + second_fc_bias
   if is_training:
     final_fc_input = tf.nn.dropout(second_fc, dropout_prob)
   else:
     final_fc_input = second_fc
   label_count = model_settings['label_count']
-  final_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [second_fc_output_channels, label_count], stddev=0.01))
-  final_fc_bias = tf.Variable(tf.zeros([label_count]))
+
+  final_fc_weights = get_initial_value(
+    [second_fc_output_channels, label_count],
+    weight_initialize_method,
+    0.01
+  )  
+  final_fc_bias = get_initial_value(
+    [label_count],
+    bais_initial_type
+  )
+
   final_fc = tf.matmul(final_fc_input, final_fc_weights) + final_fc_bias
   if is_training:
     return final_fc, dropout_prob
@@ -483,8 +561,12 @@ def create_low_latency_svdf_model(fingerprint_input, model_settings,
   new_fingerprint_input = tf.expand_dims(new_fingerprint_input, 2)
 
   # Create the frequency filters.
-  weights_frequency = tf.Variable(
-      tf.truncated_normal([input_frequency_size, num_filters], stddev=0.01))
+  weights_frequency = get_initial_value(
+    [input_frequency_size, num_filters],
+    weight_initialize_method,
+    0.01
+  )
+
   # Expand to add input channels dimensions.
   # weights_frequency: [input_frequency_size, 1, num_filters]
   weights_frequency = tf.expand_dims(weights_frequency, 1)
@@ -506,8 +588,11 @@ def create_low_latency_svdf_model(fingerprint_input, model_settings,
     activations_time = new_memory
 
   # Create the time filters.
-  weights_time = tf.Variable(
-      tf.truncated_normal([num_filters, input_time_size], stddev=0.01))
+  weights_time = get_initial_value(
+    [num_filters, input_time_size],
+    weight_initialize_method,
+    0.01
+  )
   # Apply the time filter on the outputs of the feature filters.
   # weights_time: [num_filters, input_time_size, 1]
   # outputs: [num_filters, batch, 1]
@@ -536,29 +621,51 @@ def create_low_latency_svdf_model(fingerprint_input, model_settings,
     first_dropout = first_relu
 
   first_fc_output_channels = 256
-  first_fc_weights = tf.Variable(
-      tf.truncated_normal([num_units, first_fc_output_channels], stddev=0.01))
-  first_fc_bias = tf.Variable(tf.zeros([first_fc_output_channels]))
+
+  first_fc_weights = get_initial_value(
+    [num_units, first_fc_output_channels],
+    weight_initialize_method,
+    0.01
+  )
+  first_fc_bias = get_initial_value(
+    [first_fc_output_channels],
+    bias_initialize_method
+  )
+
   first_fc = tf.matmul(first_dropout, first_fc_weights) + first_fc_bias
   if is_training:
     second_fc_input = tf.nn.dropout(first_fc, dropout_prob)
   else:
     second_fc_input = first_fc
   second_fc_output_channels = 256
-  second_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [first_fc_output_channels, second_fc_output_channels], stddev=0.01))
-  second_fc_bias = tf.Variable(tf.zeros([second_fc_output_channels]))
+
+  second_fc_weights = get_initial_value(
+    [first_fc_output_channels, second_fc_output_channels],
+    weight_initialize_method,
+    0.01
+  )
+  second_fc_bias = get_initial_value(
+    [second_fc_output_channels],
+    bias_initialize_method
+  )
+
   second_fc = tf.matmul(second_fc_input, second_fc_weights) + second_fc_bias
   if is_training:
     final_fc_input = tf.nn.dropout(second_fc, dropout_prob)
   else:
     final_fc_input = second_fc
   label_count = model_settings['label_count']
-  final_fc_weights = tf.Variable(
-      tf.truncated_normal(
-          [second_fc_output_channels, label_count], stddev=0.01))
-  final_fc_bias = tf.Variable(tf.zeros([label_count]))
+
+  final_fc_weights = get_initial_value(
+    [second_fc_output_channels, label_count],
+    weight_initialize_method,
+    0.01
+  )
+  final_fc_bias = get_initial_value(
+    [label_count],
+    bias_initialize_method
+  )
+
   final_fc = tf.matmul(final_fc_input, final_fc_weights) + final_fc_bias
   if is_training:
     return final_fc, dropout_prob
