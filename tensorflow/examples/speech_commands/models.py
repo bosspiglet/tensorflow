@@ -259,7 +259,7 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   )  
   first_bias = get_initial_value(
     [first_filter_count],
-    bais_initial_type
+    bias_initialize_method
   )
 
   first_conv = tf.nn.conv2d(fingerprint_4d, first_weights, [1, 1, 1, 1],
@@ -284,7 +284,7 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   )  
   second_bias = get_initial_value(
     [second_filter_count],
-    bais_initial_type
+    bias_initialize_method
   )
 
   second_conv = tf.nn.conv2d(max_pool, second_weights, [1, 1, 1, 1],
@@ -311,7 +311,7 @@ def create_conv_model(fingerprint_input, model_settings, is_training):
   )  
   final_fc_bias = get_initial_value(
     [label_count],
-    bais_initial_type
+    bias_initialize_method
   )
 
   final_fc = tf.matmul(flattened_second_conv, final_fc_weights) + final_fc_bias
@@ -386,7 +386,7 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   )  
   first_bias = get_initial_value(
     [labfirst_filter_countel_count],
-    bais_initial_type
+    bias_initialize_method
   )
 
   first_conv = tf.nn.conv2d(fingerprint_4d, first_weights, [
@@ -416,7 +416,7 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   )  
   first_fc_bias = get_initial_value(
     [first_fc_output_channels],
-    bais_initial_type
+    bias_initialize_method
   )
 
   first_fc = tf.matmul(flattened_first_conv, first_fc_weights) + first_fc_bias
@@ -433,7 +433,7 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   )  
   second_fc_bias = get_initial_value(
     [second_fc_output_channels],
-    bais_initial_type
+    bias_initialize_method
   )
 
   second_fc = tf.matmul(second_fc_input, second_fc_weights) + second_fc_bias
@@ -450,7 +450,7 @@ def create_low_latency_conv_model(fingerprint_input, model_settings,
   )  
   final_fc_bias = get_initial_value(
     [label_count],
-    bais_initial_type
+    bias_initialize_method
   )
 
   final_fc = tf.matmul(final_fc_input, final_fc_weights) + final_fc_bias
