@@ -26,8 +26,8 @@ import tensorflow as tf
 def prepare_model_settings(label_count, sample_rate, clip_duration_ms,
                            window_size_ms, window_stride_ms,
                            dct_coefficient_count,
-                           weight_initialize_method="truncated_normal",
-                           bias_initialize_method="zeros"):
+                           weight_initialize="truncated_normal",
+                           bias_initialize="zeros"):
   """Calculates common settings needed for all models.
 
   Args:
@@ -43,8 +43,8 @@ def prepare_model_settings(label_count, sample_rate, clip_duration_ms,
   """
   global weight_initialize_method
   global bias_initialize_method
-  weight_initialize_method = weight_initialize_method
-  bias_initialize_method = bias_initialize_method
+  weight_initialize_method = weight_initialize
+  bias_initialize_method = bias_initialize
 
   tf.logging.info('weight_initialize_method %s', weight_initialize_method) 
   tf.logging.info('bias_initialize_method %s', bias_initialize_method) 
