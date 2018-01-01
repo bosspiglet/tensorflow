@@ -156,7 +156,11 @@ class AudioProcessor(object):
                model_settings, infer_data_dir=None):
     self.data_dir = data_dir
     self.infer_data_dir = infer_data_dir
-    self.maybe_download_and_extract_dataset(data_url, data_dir)
+    # read data when infer_data_dir exists
+    # If infer_data_dir were None, modified to not call maybe_download_and_extract_dataset.
+    # But because there is default value in infer_data_dir, need to set None in the infer_data_dir.
+    if infer_data_dir == None:
+      self.maybe_download_and_extract_dataset(data_url, data_dir)
     self.prepare_data_index(silence_percentage, unknown_percentage,
                             wanted_words, validation_percentage,
                             testing_percentage)
