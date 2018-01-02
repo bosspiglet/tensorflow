@@ -128,7 +128,16 @@ def main(_):
   # set_size = audio_processor.set_size('testing')
   set_size = len(audio_processor.infer_data_index)
   tf.logging.info('set_size=%d', set_size)
-    
+
+  # load binary data from file
+  b = open('output_binary.csv', 'r', encoding='utf-8')
+  rdr = csv.reader(b)
+  next(rdr)
+  goNoDic = {}
+  for line in rdr:
+      goNoDic[line[0]] = line[1]
+  b.close()
+
   f = open('output.csv', 'w', encoding='utf-8', newline='')
   wr = csv.writer(f)
   wr.writerow(['fname', 'label'])
@@ -149,6 +158,9 @@ def main(_):
     for i in range(len(predict_result)):
         result = audio_processor.words_list[predict_result[i]]
         filename = test_filepaths[i]
+        if result == 'go' or result == 'no':
+            result = goNoDic[filename]
+
         if result == '_silence_':
             result = 'silence'
         if result == '_unknown_':
