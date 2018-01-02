@@ -103,10 +103,11 @@ def main(_):
   audio_processor = input_data.AudioProcessor(
       FLAGS.data_url, FLAGS.data_dir, FLAGS.silence_percentage,
       FLAGS.unknown_percentage,
-      FLAGS.wanted_words.split(','), FLAGS.unknown_words.split(','),
-      FLAGS.validation_percentage,
-      FLAGS.testing_percentage, model_settings,
-      FLAGS.infer_data_dir)
+      FLAGS.wanted_words.split(','), FLAGS.unknown_words.split(','), FLAGS.validation_percentage,
+      FLAGS.testing_percentage, model_settings)
+
+
+  label_count = model_settings['label_count']
 
   fingerprint_size = model_settings['fingerprint_size']
 
@@ -119,41 +120,73 @@ def main(_):
       FLAGS.model_architecture,
       is_training=True)
 
+  # Define loss and optimizer
+  ground_truth_input = tf.placeholder(
+      tf.int64, [None], name='groundtruth_input')
+
   predicted_indices = tf.argmax(logits, 1)
+  correct_prediction = tf.equal(predicted_indices, ground_truth_input)
+  confusion_matrix = tf.confusion_matrix(
+      ground_truth_input, predicted_indices, num_classes=label_count)
+  evaluation_step = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
   tf.global_variables_initializer().run()
 
   if FLAGS.start_checkpoint:
     models.load_variables_from_checkpoint(sess, FLAGS.start_checkpoint)
 
-  # ?? 
-  # set_size = audio_processor.set_size('testing')
-  set_size = len(audio_processor.infer_data_index)
-  tf.logging.info('set_size=%d', set_size)
-    
-  f = open('output.csv', 'w', encoding='utf-8', newline='')
-  wr = csv.writer(f)
-  wr.writerow(['fname', 'label'])
+  set_size = audio_processor.set_size('validation')
+  total_accuracy = 0
+  total_conf_matrix = None
   for i in xrange(0, set_size, FLAGS.batch_size):
-    test_fingerprints, test_filepaths = audio_processor.get_infer_data(
-        FLAGS.batch_size, i, model_settings, sess)
+    validation_fingerprints, validation_ground_truth = (
+        audio_processor.get_data(FLAGS.batch_size, i, model_settings, 0.0,
+                                0.0, 0, 'validation', sess))
+    # Run a validation step and capture training summaries for TensorBoard
+    # with the `merged` op.
+    validation_accuracy, conf_matrix = sess.run(
+      [evaluation_step, confusion_matrix],
+      feed_dict={
+        fingerprint_input: validation_fingerprints,
+        ground_truth_input: validation_ground_truth,
+        dropout_prob: 1.0
+      })
+    batch_size = min(FLAGS.batch_size, set_size - i)
+    total_accuracy += (validation_accuracy * batch_size) / set_size
 
-    predict_result = sess.run(
-        [predicted_indices],
+  if total_conf_matrix is None:
+    total_conf_matrix = conf_matrix
+  else:
+    total_conf_matrix += conf_matrix
+
+  tf.logging.info('Confusion Matrix:\n %s' % (total_conf_matrix))
+  tf.logging.info('Validation accuracy = %.1f%% (N=%d)' %
+                (total_accuracy * 100, set_size))
+
+  set_size = audio_processor.set_size('testing')
+  tf.logging.info('set_size=%d', set_size)
+  total_accuracy = 0
+  total_conf_matrix = None
+  for i in xrange(0, set_size, FLAGS.batch_size):
+    test_fingerprints, test_ground_truth = audio_processor.get_data(
+        FLAGS.batch_size, i, model_settings, 0.0, 0.0, 0, 'testing', sess)
+    test_accuracy, conf_matrix = sess.run(
+        [evaluation_step, confusion_matrix],
         feed_dict={
             fingerprint_input: test_fingerprints,
+            ground_truth_input: test_ground_truth,
             dropout_prob: 1.0
         })
-    predict_result = predict_result[0]
-    
-    print('get %i prediction', len(predict_result))
+    batch_size = min(FLAGS.batch_size, set_size - i)
+    total_accuracy += (test_accuracy * batch_size) / set_size
+    if total_conf_matrix is None:
+      total_conf_matrix = conf_matrix
+    else:
+      total_conf_matrix += conf_matrix
+  tf.logging.info('Confusion Matrix:\n %s' % (total_conf_matrix))
+  tf.logging.info('Test accuracy = %.1f%% (N=%d)' % (total_accuracy * 100,
+                                                           set_size))
 
-    for i in range(len(predict_result)):
-        result = audio_processor.words_list[predict_result[i]]
-        filename = test_filepaths[i]
-        wr.writerow([filename, result])
-
-  f.close()
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -169,13 +202,6 @@ if __name__ == '__main__':
       default='/tmp/speech_dataset/',
       help="""\
       Where to download the speech training data to.
-      """)
-  parser.add_argument(
-      '--infer_data_dir',
-      type=str,
-      default='/tmp/speech_dataset_infer/',
-      help="""\
-      Where to download the speech inference data to.
       """)
   parser.add_argument(
       '--background_volume',

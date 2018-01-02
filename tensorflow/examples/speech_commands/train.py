@@ -105,7 +105,8 @@ def main(_):
   audio_processor = input_data.AudioProcessor(
       FLAGS.data_url, FLAGS.data_dir, FLAGS.silence_percentage,
       FLAGS.unknown_percentage,
-      FLAGS.wanted_words.split(','), FLAGS.validation_percentage,
+      FLAGS.wanted_words.split(','), FLAGS.unknown_words.split(','),
+      FLAGS.validation_percentage,
       FLAGS.testing_percentage, model_settings)
   fingerprint_size = model_settings['fingerprint_size']
   label_count = model_settings['label_count']
@@ -165,7 +166,7 @@ def main(_):
   global_step = tf.train.get_or_create_global_step()
   increment_global_step = tf.assign(global_step, global_step + 1)
 
-  saver = tf.train.Saver(tf.global_variables())
+  saver = tf.train.Saver(tf.global_variables(), max_to_keep=None)
 
   # Merge all the summaries and write them out to /tmp/retrain_logs (by default)
   merged_summaries = tf.summary.merge_all()
@@ -400,7 +401,12 @@ if __name__ == '__main__':
       '--wanted_words',
       type=str,
       default='yes,no,up,down,left,right,on,off,stop,go',
-      help='Words to use (others will be added to an unknown label)',)
+      help='Words to use (others will be added to an unknown label)')
+  parser.add_argument(
+      '--unknown_words',
+      type=str,
+      default='bed,bird,cat,dog,eight,five,four,happy,house,marvin,nine,one,seven,sheila,six,three,tree,two,wow,zero',
+      help='Words to use with unknown label.')
   parser.add_argument(
       '--train_dir',
       type=str,

@@ -38,9 +38,9 @@ from tensorflow.python.platform import gfile
 from tensorflow.python.util import compat
 
 MAX_NUM_WAVS_PER_CLASS = 2**27 - 1  # ~134M
-SILENCE_LABEL = '_silence_'
+SILENCE_LABEL = 'silence'
 SILENCE_INDEX = 0
-UNKNOWN_WORD_LABEL = '_unknown_'
+UNKNOWN_WORD_LABEL = 'unknown'
 UNKNOWN_WORD_INDEX = 1
 BACKGROUND_NOISE_DIR_NAME = '_background_noise_'
 RANDOM_SEED = 59185
@@ -152,14 +152,14 @@ class AudioProcessor(object):
   """Handles loading, partitioning, and preparing audio training data."""
 
   def __init__(self, data_url, data_dir, silence_percentage, unknown_percentage,
-               wanted_words, validation_percentage, testing_percentage,
+               wanted_words, unknown_words, validation_percentage, testing_percentage,
                model_settings, infer_data_dir=None):
     self.data_dir = data_dir
     self.infer_data_dir = infer_data_dir
     self.maybe_download_and_extract_dataset(data_url, data_dir)
     self.prepare_data_index(silence_percentage, unknown_percentage,
                             wanted_words, validation_percentage,
-                            testing_percentage)
+                            testing_percentage, unknown_words)
 
     tf.logging.info('words_list %s', self.words_list) 
     tf.logging.info('word_to_index %s', self.word_to_index) 
@@ -212,7 +212,7 @@ class AudioProcessor(object):
 
   def prepare_data_index(self, silence_percentage, unknown_percentage,
                          wanted_words, validation_percentage,
-                         testing_percentage):
+                         testing_percentage, unknown_words):
     """Prepares a list of the samples organized by set and label.
 
     The training loop needs a list of all the available data, organized by
@@ -228,6 +228,7 @@ class AudioProcessor(object):
       wanted_words: Labels of the classes we want to be able to recognize.
       validation_percentage: How much of the data set to use for validation.
       testing_percentage: How much of the data set to use for testing.
+      unknown_words: Labels of the classes we want to be able to recognize as unknown.
 
     Returns:
       Dictionary containing a list of file information for each set partition,
@@ -239,8 +240,11 @@ class AudioProcessor(object):
     # Make sure the shuffling and picking of unknowns is deterministic.
     random.seed(RANDOM_SEED)
     wanted_words_index = {}
+    unknown_words_index = {}
     for index, wanted_word in enumerate(wanted_words):
       wanted_words_index[wanted_word] = index + 2
+    for index, unknown_word in enumerate(unknown_words):
+      unknown_words_index[unknown_word] = index + 2
     self.data_index = {'validation': [], 'testing': [], 'training': []}
     unknown_index = {'validation': [], 'testing': [], 'training': []}
     all_words = {}
@@ -259,7 +263,7 @@ class AudioProcessor(object):
       # we'll use to train the unknown label.
       if word in wanted_words_index:
         self.data_index[set_index].append({'label': word, 'file': wav_path})
-      else:
+      elif word in unknown_words_index:
         unknown_index[set_index].append({'label': word, 'file': wav_path})
     if not all_words:
       raise Exception('No .wavs found at ' + search_path)

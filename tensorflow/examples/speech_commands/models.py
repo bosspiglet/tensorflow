@@ -125,7 +125,7 @@ def get_initial_value(shape, kind, stddev_val=None):
 
   Args:
     shape: shape of initial tensor
-    kind: "truncated_normal", "xavier", "he", "zeros"
+    kind: "truncated_normal", "xavier", "zeros"
     stddev_val: (optional)
   """
   if kind == "truncated_normal":
@@ -135,7 +135,7 @@ def get_initial_value(shape, kind, stddev_val=None):
     return tf.Variable(initializer(shape))
   elif kind == "zeros":
     return tf.Variable(tf.zeros(shape))
-
+  
 def load_variables_from_checkpoint(sess, start_checkpoint):
   """Utility function to centralize checkpoint restoration.
 
