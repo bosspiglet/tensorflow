@@ -158,7 +158,7 @@ def main(_):
     for i in range(len(predict_result)):
         result = audio_processor.words_list[predict_result[i]]
         filename = test_filepaths[i]
-        if result == 'go' or result == 'no':
+        if goNoDic[filename] == 'go' or goNoDic[filename] == 'no':
             result = goNoDic[filename]
 
         if result == '_silence_':
